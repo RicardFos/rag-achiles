@@ -48,3 +48,23 @@ class ParsedDocument(BaseModel):
         return [c.text for c in self.chunks]
 
     model_config = ConfigDict(validate_assignment=True)
+
+
+class Citation(BaseModel):
+    """Represents a citation to a source document."""
+
+    document: str = Field(..., description="Source document filename")
+    page: int = Field(..., ge=1, description="Page number in document")
+    text_snippet: str = Field(
+        ..., max_length=200, description="Relevant excerpt from source"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "document": "ResumenReunionGA_20231124.pdf",
+                "page": 3,
+                "text_snippet": "El presupuesto aprobado fue de 5 millones de euros...",
+            }
+        }
+    )

@@ -23,7 +23,7 @@ class VectorStoreConfig(BaseModel):
         description="Path to save/load metadata",
     )
     similarity_threshold: float = Field(
-        default=0.7,
+        default=0.6,
         ge=0.0,
         le=1.0,
         description="Minimum similarity score for retrieval",
@@ -39,7 +39,10 @@ class SearchResult(BaseModel):
     """Result from vector similarity search."""
 
     chunk: DocumentChunk = Field(..., description="Retrieved document chunk")
-    score: float = Field(..., ge=0.0, le=1.0, description="Similarity score")
+    score: float = Field(..., ge=0.0, le=1.0, description="Bi-encoder similarity score")
+    rerank_score: Optional[float] = Field(
+        default=None, description="Cross-encoder rerank score (if re-ranking was used)"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -51,6 +54,7 @@ class SearchResult(BaseModel):
                     "chunk_index": 5,
                 },
                 "score": 0.89,
+                "rerank_score": 8.42,
             }
         }
     )
