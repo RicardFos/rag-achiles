@@ -48,23 +48,3 @@ class ParsedDocument(BaseModel):
         return [c.text for c in self.chunks]
 
     model_config = ConfigDict(validate_assignment=True)
-
-
-class ParserConfig(BaseModel):
-    """Configuration for document parsing."""
-
-    chunk_size: int = Field(default=512, ge=50, le=2000)
-    chunk_overlap: int = Field(default=50, ge=0, le=500)
-    separators: List[str] = Field(default=["\n\n", "\n", " ", ""])
-
-    model_config = ConfigDict(frozen=True)  # Immutable config
-
-
-class ParserConfig(BaseModel):
-    """Configuration for document parsing."""
-
-    chunk_size: int = Field(default=512, ge=50, le=2000)
-    chunk_overlap: int = Field(default=50, ge=0, le=500)
-    separators: List[str] = Field(default=["\n\n", "\n", " ", ""])
-
-    model_config = ConfigDict(frozen=True)  # Immutable config

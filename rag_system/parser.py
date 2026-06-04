@@ -7,7 +7,17 @@ from pydantic import BaseModel, Field, ConfigDict
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from rag_system.models import DocumentChunk, ParsedDocument, ParserConfig
+from rag_system.models import DocumentChunk, ParsedDocument
+
+
+class ParserConfig(BaseModel):
+    """Configuration for document parsing."""
+
+    chunk_size: int = Field(default=512, ge=50, le=2000)
+    chunk_overlap: int = Field(default=50, ge=0, le=500)
+    separators: List[str] = Field(default=["\n\n", "\n", " ", ""])
+
+    model_config = ConfigDict(frozen=True)  # Immutable config
 
 
 class DocumentParser:
