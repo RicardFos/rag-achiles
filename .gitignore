@@ -1,3 +1,4 @@
 ﻿rag_system/__pycache__
 faiss_index
 exported_chunks
+.env

@@ -9,12 +9,12 @@ and answering questions with citations.
 __version__ = "1.0.0"
 
 # Data models
-from rag_system.models import DocumentChunk, ParsedDocument, Citation
+from rag_system.models import DocumentChunk, ParsedDocument, Citation, SearchResult
 
 # Core components
 from rag_system.parser import DocumentParser, ParserConfig
 from rag_system.embeddings import Embedder, EmbeddingConfig
-from rag_system.vector_store import FAISSVectorStore, VectorStoreConfig, SearchResult
+from rag_system.vector_store import FAISSVectorStore, VectorStoreConfig
 from rag_system.reranker import Reranker, RerankerConfig, RerankResult
 from rag_system.llm import RAGGenerator, LLMConfig, LLMResponse
 
@@ -26,7 +26,8 @@ from rag_system.evaluation import (
     compute_answer_similarity,
     evaluate_rag_system,
     print_evaluation_results,
-    analyze_result
+    analyze_result,
+    inspect_citations,
 )
 
 __all__ = [
@@ -60,4 +61,5 @@ __all__ = [
     "evaluate_rag_system",
     "print_evaluation_results",
     "analyze_result",
+    "inspect_citations",
 ]

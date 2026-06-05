@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field, ConfigDict, SecretStr
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from rag_system.models import DocumentChunk, Citation
-from rag_system.vector_store import FAISSVectorStore, SearchResult
+from rag_system.models import DocumentChunk, Citation, SearchResult
+from rag_system.vector_store import FAISSVectorStore
 from rag_system.embeddings import Embedder
 from rag_system.reranker import Reranker, RerankerConfig
 
@@ -16,7 +16,9 @@ class LLMConfig(BaseModel):
     """Configuration for LLM generation."""
 
     api_key: SecretStr = Field(..., description="Google API key")
-    model_name: str = Field(default="gemini-1.5-flash", description="Gemini model name")
+    model_name: str = Field(
+        default="gemini-3.1-flash-lite", description="Gemini model name"
+    )
     temperature: float = Field(
         default=0.0,
         ge=0.0,
@@ -27,7 +29,7 @@ class LLMConfig(BaseModel):
         default=1024, ge=64, le=8192, description="Maximum tokens in generated response"
     )
     top_k: int = Field(
-        default=5,
+        default=7,
         ge=1,
         le=20,
         description="Number of chunks to retrieve from vector store",
@@ -62,8 +64,24 @@ class LLMResponse(BaseModel):
         if self.citations:
             response += f"\n**Sources ({len(self.citations)}):**\n"
             for i, cite in enumerate(self.citations, 1):
-                response += f"{i}. {cite.document}, p.{cite.page}\n"
-                response += f'   "{cite.text_snippet[:100]}..."\n'
+                response += f"{i}. {cite.document}, p.{cite.page} ({cite.num_chunks} chunk{'s' if cite.num_chunks > 1 else ''})"
+
+                # Show best scores
+                if cite.best_rerank_score:
+                    response += f" [rerank: {cite.best_rerank_score:.3f}]"
+                elif cite.best_score:
+                    response += f" [score: {cite.best_score:.3f}]"
+                response += "\n"
+
+                # Show preview of first chunk
+                if cite.chunks:
+                    first_text = cite.chunks[0].chunk.text
+                    text_preview = (
+                        first_text[:100] + "..."
+                        if len(first_text) > 100
+                        else first_text
+                    )
+                    response += f'   "{text_preview}"\n'
         else:
             response += "\n*No sources cited*"
 
@@ -205,9 +223,7 @@ class RAGGenerator:
             return results
         else:
             # Single-stage retrieval: bi-encoder only
-            return self.vector_store.search(
-                query_embedding, top_k=self.config.top_k
-            )
+            return self.vector_store.search(query_embedding, top_k=self.config.top_k)
 
     def _format_context(self, results: List[SearchResult]) -> str:
         """
@@ -249,7 +265,24 @@ class RAGGenerator:
         ]
 
         response = self.llm.invoke(messages)
-        return response.content
+
+        # Handle different response formats (Gemini 2.x vs 3.x)
+        if isinstance(response.content, str):
+            # Gemini 2.x format: plain string
+            return response.content
+        elif isinstance(response.content, list):
+            # Gemini 3.x format: list of content blocks
+            # Extract text from all text blocks
+            text_parts = []
+            for block in response.content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text_parts.append(block.get("text", ""))
+                elif hasattr(block, "text"):
+                    text_parts.append(block.text)
+            return "".join(text_parts)
+        else:
+            # Fallback: try to convert to string
+            return str(response.content)
 
     def _build_prompt(self, question: str, context: str) -> dict:
         """
@@ -294,38 +327,42 @@ class RAGGenerator:
         self, results: List[SearchResult], answer: str
     ) -> List[Citation]:
         """
-        Extract citations from retrieved chunks that appear in answer.
+        Extract citations from retrieved chunks that LLM referenced in answer.
+
+        Groups chunks by (document, page) since a citation refers to a page,
+        not individual chunks. Multiple chunks from the same page are grouped
+        into a single Citation object.
 
         Args:
-            results: Retrieved search results
-            answer: Generated answer text
+            results: Retrieved search results with scores
+            answer: Generated answer text with inline citations
 
         Returns:
-            List of Citation objects
+            List of Citation objects, one per (document, page) cited
         """
-        citations = []
-        seen = set()  # Deduplicate by (document, page)
+        from collections import defaultdict
+
+        # Group chunks by (document, page)
+        page_chunks = defaultdict(list)
 
         for result in results:
             chunk = result.chunk
-            key = (chunk.document, chunk.page)
-
-            # Check if this source is cited in the answer
             citation_ref = f"[{chunk.document}, p.{chunk.page}]"
 
-            if citation_ref in answer and key not in seen:
-                # Extract snippet (first 200 chars of chunk)
-                snippet = chunk.text[:200].strip()
-                if len(chunk.text) > 200:
-                    snippet += "..."
+            # Only include if LLM cited this (document, page)
+            if citation_ref in answer:
+                page_chunks[(chunk.document, chunk.page)].append(result)
 
-                citations.append(
-                    Citation(
-                        document=chunk.document, page=chunk.page, text_snippet=snippet
-                    )
+        # Build Citation objects
+        citations = []
+        for (document, page), chunk_results in page_chunks.items():
+            citations.append(
+                Citation(
+                    document=document,
+                    page=page,
+                    chunks=chunk_results,
                 )
-
-                seen.add(key)
+            )
 
         return citations
 

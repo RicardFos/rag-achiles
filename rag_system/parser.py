@@ -13,8 +13,8 @@ from rag_system.models import DocumentChunk, ParsedDocument
 class ParserConfig(BaseModel):
     """Configuration for document parsing."""
 
-    chunk_size: int = Field(default=512, ge=50, le=2000)
-    chunk_overlap: int = Field(default=50, ge=0, le=500)
+    chunk_size: int = Field(default=768, ge=50, le=2000)
+    chunk_overlap: int = Field(default=150, ge=0, le=500)
     separators: List[str] = Field(default=["\n\n", "\n", " ", ""])
 
     model_config = ConfigDict(frozen=True)  # Immutable config

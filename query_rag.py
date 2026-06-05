@@ -5,16 +5,20 @@ Usage:
     python query_rag.py "¿Cuál es la misión del grupo motor?"
 
 Environment:
-    GOOGLE_API_KEY: Required for Gemini LLM
+    GOOGLE_API_KEY: Required for Gemini LLM (loaded from .env file)
 """
 import os
 import sys
 from pathlib import Path
 from pydantic import SecretStr
+from dotenv import load_dotenv
 
 from rag_system.vector_store import FAISSVectorStore
 from rag_system.embeddings import Embedder
 from rag_system.llm import RAGGenerator, LLMConfig
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def query_rag(question: str, use_reranking: bool = True) -> None:
@@ -28,9 +32,12 @@ def query_rag(question: str, use_reranking: bool = True) -> None:
     # Check for API key
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("❌ Error: GOOGLE_API_KEY environment variable not set")
-        print("\nSet it with:")
-        print("  export GOOGLE_API_KEY='your-api-key-here'")
+        print("❌ Error: GOOGLE_API_KEY not found")
+        print("\nCreate a .env file with:")
+        print("  GOOGLE_API_KEY=your-api-key-here")
+        print("\nOr set environment variable:")
+        print("  PowerShell: $env:GOOGLE_API_KEY='your-api-key-here'")
+        print("  Bash: export GOOGLE_API_KEY='your-api-key-here'")
         sys.exit(1)
 
     # Check if index exists
@@ -53,7 +60,7 @@ def query_rag(question: str, use_reranking: bool = True) -> None:
 
     config = LLMConfig(
         api_key=SecretStr(api_key),
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.0-flash-001",
         temperature=0.0,
         top_k=5
     )

@@ -50,21 +50,92 @@ class ParsedDocument(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
 
+class SearchResult(BaseModel):
+    """Result from vector similarity search."""
+
+    chunk: DocumentChunk = Field(..., description="Retrieved document chunk")
+    score: float = Field(..., ge=0.0, le=1.0, description="Bi-encoder similarity score")
+    rerank_score: Optional[float] = Field(
+        default=None, description="Cross-encoder rerank score (if re-ranking was used)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "chunk": {
+                    "text": "El presupuesto aprobado fue...",
+                    "document": "ResumenReunionGA_20231124.pdf",
+                    "page": 3,
+                    "chunk_index": 5,
+                },
+                "score": 0.89,
+                "rerank_score": 8.42,
+            }
+        }
+    )
+
+
 class Citation(BaseModel):
-    """Represents a citation to a source document."""
+    """
+    Represents a citation to a (document, page) with associated chunks.
+
+    A citation is a reference to a specific page in a document.
+    Multiple chunks from the same page are grouped together.
+    """
 
     document: str = Field(..., description="Source document filename")
     page: int = Field(..., ge=1, description="Page number in document")
-    text_snippet: str = Field(
-        ..., max_length=200, description="Relevant excerpt from source"
+    chunks: List["SearchResult"] = Field(
+        default_factory=list,
+        description="All retrieved chunks from this (document, page)",
     )
+
+    @property
+    def num_chunks(self) -> int:
+        """Number of chunks associated with this citation."""
+        return len(self.chunks)
+
+    @property
+    def best_score(self) -> float:
+        """Best retrieval score among all chunks."""
+        if not self.chunks:
+            return 0.0
+        return max(chunk.score for chunk in self.chunks)
+
+    @property
+    def best_rerank_score(self) -> Optional[float]:
+        """Best rerank score among all chunks (if reranking used)."""
+        if not self.chunks:
+            return None
+        rerank_scores = [
+            chunk.rerank_score
+            for chunk in self.chunks
+            if hasattr(chunk, "rerank_score") and chunk.rerank_score is not None
+        ]
+        return max(rerank_scores) if rerank_scores else None
+
+    @property
+    def all_text(self) -> str:
+        """Concatenate all chunk texts from this citation."""
+        return "\n\n".join(chunk.chunk.text for chunk in self.chunks)
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "document": "ResumenReunionGA_20231124.pdf",
                 "page": 3,
-                "text_snippet": "El presupuesto aprobado fue de 5 millones de euros...",
+                "chunks": [
+                    {
+                        "chunk": {
+                            "text": "El presupuesto aprobado fue...",
+                            "document": "ResumenReunionGA_20231124.pdf",
+                            "page": 3,
+                            "chunk_index": 5,
+                        },
+                        "score": 0.85,
+                        "rerank_score": 0.92,
+                    }
+                ],
             }
         }
     )

@@ -15,6 +15,14 @@ La última notebook muestra el proceso de pregunta-retrieval-respuesta usando LL
 
 Todo el código y notebooks han sido escritos en inglés (mi idioma principal para programar), aunque los documentos y system prompt del asistente LLM están escritos en castellano para este ejemplo en concreto. He usado el asistente de código Claude Code para ayudarme a implementar mis requisitos, usando spec-drive-development, escribiendo requisitos claros, pasos y estructura del código. Las notebooks se han aprovechado como testeo de los métodos y clases además de mostrar claramente cada paso del proceso RAG.
 
+## 🎯 Puntos Clave
+
+- ✅ **93% de precisión en citación** - respuestas fundamentadas en fuentes
+- 🔄 **Re-ranking en dos etapas** - bi-encoder + cross-encoder mejora relevancia
+- 🌍 **Soporte español** - embeddings multilingües optimizados
+- 🆓 **Completamente gratuito** - sin API keys de pago requeridas
+- 📦 **Todo local** - embeddings, vector DB y reranker en tu máquina
+
 ## Características
 
 - 📄 **Ingesta de PDFs**: Extrae texto de PDFs con metadatos de página
@@ -36,12 +44,12 @@ Todo el código y notebooks han sido escritos en inglés (mi idioma principal pa
        │ Parser (PyMuPDF)
        ↓
 ┌─────────────────────┐
-│ Documentos Chunked  │ (recursivo, 800 tokens, 200 overlap)
+│ Documentos Chunked  │ (recursivo, 768 tokens, 150 overlap)
 └──────┬──────────────┘
        │ Embeddings (paraphrase-multilingual-MiniLM-L12-v2)
        ↓
 ┌──────────────────────┐
-│  FAISS Vector Store  │ (619 chunks, IndexFlatIP)
+│  FAISS Vector Store  │ (~500 chunks, IndexFlatIP)
 └──────┬───────────────┘
        │
        │  ┌──────────────────────┐
@@ -50,25 +58,28 @@ Todo el código y notebooks han sido escritos en inglés (mi idioma principal pa
        ↓         ↓   Embedding (paraphrase-multilingual-MiniLM-L12-v2)
 ┌──────────────────────┐
 │  Recuperación Etapa 1│ Bi-encoder: Top-20 candidatos
-└──────┬───────────────┘
-       │
-       ↓
+└──────────┬───────────┘
+           │
+           ↓
 ┌──────────────────────┐
 │  Recuperación Etapa 2│ Cross-encoder: Re-ranking a Top-5
-└──────┬───────────────┘ (cross-encoder/ms-marco-MiniLM-L-12-v2)
-       │
-       ↓
+└──────────┬───────────┘ (cross-encoder/ms-marco-MiniLM-L-12-v2)
+           │
+           ↓
 ┌──────────────────────┐
 │   Generación LLM     │ Gemini 1.5 Flash + Extracción de Citas
-└──────┬───────────────┘
-       │
-       ↓
+└──────────┬───────────┘
+           │
+           ↓
 ┌──────────────────────┐
 │ Respuesta + Citas    │
 └──────────────────────┘
 ```
 
 ## Inicio Rápido
+
+### Requisitos
+- **Python 3.11 o superior** (testeado con Python 3.11.9)
 
 ### 1. Instalación
 
@@ -85,8 +96,25 @@ pip install -r requirements.txt
 
 Obtener una API key gratuita desde [Google AI Studio](https://aistudio.google.com/app/apikey)
 
+**Opción 1: Archivo .env (Recomendado)**
+```bash
+# Copiar el archivo de ejemplo
+cp .env.example .env
+
+# Editar .env y añadir tu API key
+GOOGLE_API_KEY=tu-api-key-aqui
+```
+
+**Opción 2: Variable de entorno**
+
+Linux/Mac:
 ```bash
 export GOOGLE_API_KEY='tu-api-key-aqui'
+```
+
+Windows PowerShell:
+```powershell
+$env:GOOGLE_API_KEY='tu-api-key-aqui'
 ```
 
 ### 3. Indexar Documentos
@@ -104,9 +132,9 @@ Esto:
 ```
 📁 Found 9 PDF files in pdfs/
 ✓ Parsed 9 documents
-✓ Generated 619 chunks
-✓ Generated 619 embeddings
-✓ Saved index with 619 vectors
+✓ Generated ~500 chunks
+✓ Generated ~500 embeddings
+✓ Saved index with ~500 vectors
 ```
 
 ### 4. Consultar el Sistema
@@ -118,6 +146,19 @@ python query_rag.py "¿Cuál es la misión del grupo motor?"
 # Sin re-ranking
 python query_rag.py "¿Qué es la Escuela de Gobierno Abierto?" --no-rerank
 ```
+
+## 📋 Especificaciones Técnicas
+
+Documentación detallada de diseño y decisiones técnicas para cada componente:
+
+- **[Ingesta y Chunking](specs/ingestion_spec.md)** - Extracción de PDFs, chunking recursivo, y preservación de metadatos
+- **[Embeddings](specs/embedding_spec.md)** - Modelos multilingües, generación de vectores, y configuración
+- **[Vector Database](specs/vectordb_spec.md)** - FAISS IndexFlatIP, búsqueda por similitud coseno, y persistencia
+- **[Re-ranker](specs/reranker_spec.md)** - Cross-encoder para re-ranking en dos etapas y mejora de relevancia
+- **[Generación LLM](specs/llm_spec.md)** - Integración con Gemini, ingeniería de prompts, y extracción de citas
+- **[Evaluación](specs/evaluation_spec.md)** - Métricas, conjunto de prueba, y framework de evaluación
+
+Estas especificaciones documentan las decisiones de diseño, contratos de API, y detalles de implementación para cada componente del sistema RAG.
 
 ## Notebooks
 
@@ -141,124 +182,40 @@ Tres notebooks de Jupyter completos que demuestran el pipeline completo:
 - Generación de respuestas con LLM y citas
 - Comparación con/sin re-ranking
 - Evaluación sobre conjunto de prueba (eval.jsonl)
-- Cómputo de métricas:
-  - Precisión de citas: % de respuestas con citas válidas
-  - Precisión de fuentes: % de documentos citados que coinciden con fuentes esperadas
-  - Recall de fuentes: % de fuentes esperadas que fueron citadas
-- Inspección de resultados de ejemplo
+- Cómputo de métricas de calidad
+- Inspección detallada de resultados
 
-## Decisiones Técnicas
+## 📊 Resultados de Evaluación
 
-### 1. Estrategia de Chunking
-**Decisión:** División recursiva por caracteres con 800 tokens y 200 tokens de solapamiento
+Evaluación sobre 15 preguntas del conjunto de prueba (`eval.jsonl`):
 
-**Justificación:**
-- Basado en caracteres (no tokens) para simplicidad manteniendo efectividad
-- 800 tokens (~3-4 párrafos) balancea contexto vs. especificidad
-- 200 tokens de solapamiento previene pérdida de contexto en límites de chunks
-- División recursiva respeta estructura del documento (párrafos, oraciones)
+| Métrica | Resultado |
+|---------|-----------|
+| **Precisión de Citas** | 93.3% (14/15 respuestas con citas) |
+| **Precisión de Fuentes** | 63.3% |
+| **Recall de Fuentes** | 63.3% |
+| **Similitud Semántica** | 66.0% |
+| **Chunks Recuperados (promedio)** | 3.6 |
 
-**Alternativa considerada:** Chunking semántico fue evaluado pero añadía complejidad sin mejora significativa de calidad para este corpus.
+✅ El sistema cita fuentes consistentemente y genera respuestas fundamentadas en documentos.
 
-### 2. Modelo de Embeddings
-**Decisión:** `paraphrase-multilingual-MiniLM-L12-v2` (384-dim)
-
-**Justificación:**
-- Soporte multilingüe (documentos en español)
-- Buen balance calidad vs. velocidad (~50ms para 619 chunks)
-- Tamaño reducido (420MB) adecuado para despliegue local
-- 384 dimensiones suficientes para similitud semántica
-
-**Alternativa considerada:** OpenAI `text-embedding-3-small` proporcionaría mayor calidad pero requiere costos de API y dependencia externa.
-
-### 3. Base de Datos Vectorial
-**Decisión:** FAISS con `IndexFlatIP` (producto interno con normalización L2)
-
-**Justificación:**
-- Local-first (sin servicios externos ni API keys)
-- Búsqueda exhaustiva rápida (<1ms para 619 vectores)
-- Resultados óptimos garantizados (sin aproximación)
-- Almacenamiento persistente en disco
-
-**¿Por qué no índices aproximados?** Con solo 619 chunks, búsqueda exhaustiva es más rápida y simple que métodos aproximados (IVF, HNSW).
-
-### 4. Re-ranking con Cross-Encoder
-**Decisión:** Recuperación en dos etapas usando `cross-encoder/ms-marco-MiniLM-L-12-v2`
-
-**Justificación:**
-- **Bi-encoders** (modelos de embedding) codifican consulta y documentos independientemente → rápido pero contexto limitado
-- **Cross-encoders** procesan consulta+documento juntos → más lento pero scoring de relevancia más preciso
-- Estrategia de dos etapas: Bi-encoder recupera 20 candidatos (rápido), cross-encoder re-rankea a top-5 (preciso)
-- ~100-200ms de overhead para mejora significativa de relevancia
-
-**Impacto:** Cross-encoder identifica relevancia contextual que bi-encoders pierden (ej., "compromisos para personas mayores" rankea correctamente más alto documentos que mencionan personas mayores, aunque tengan menos coincidencias de keywords).
-
-### 5. Proveedor de LLM
-**Decisión:** Google Gemini 1.5 Flash via LangChain
-
-**Justificación:**
-- Tier gratuito disponible (sin costo para demo)
-- Inferencia rápida (~1-2s para respuestas)
-- Buen soporte multilingüe (español)
-- Integración con LangChain para flexibilidad
-
-**Ingeniería de prompts:** El prompt del sistema instruye explícitamente al modelo para:
-- Usar solo el contexto proporcionado
-- Incluir citas en formato `[documento, p.X]`
-- Decir "No tengo información suficiente" si el contexto carece de información relevante
-
-### 6. Patrón de Arquitectura
-**Decisión:** Diseño orientado a objetos con modelos Pydantic
-
-**Justificación:**
-- Seguridad de tipos y validación en tiempo de ejecución
-- Configuraciones inmutables (modelos Pydantic frozen)
-- Contratos claros entre componentes
-- Fácil de testear y extender
-
-**Estructura:**
-```python
-rag_system/
-├── models.py         # Modelos de datos Pydantic
-├── parser.py         # DocumentParser + ParserConfig
-├── embeddings.py     # Embedder + EmbeddingConfig
-├── vector_store.py   # FAISSVectorStore + VectorStoreConfig
-├── reranker.py       # Reranker + RerankerConfig
-└── llm.py           # RAGGenerator + LLMConfig
-```
+Ver análisis completo en [03_llm_generation_and_eval.ipynb](03_llm_generation_and_eval.ipynb).
 
 ## Evaluación
 
-### Conjunto de Prueba: eval.jsonl
-- **10 pares pregunta-respuesta** con pasajes fuente esperados
+### Conjunto de Prueba
+- **15 pares pregunta-respuesta** con fuentes esperadas
 - Preguntas basadas en contenido real de documentos
-- Cubre varios tipos de preguntas: factuales, multi-fuente, complejas
+- Tipos: factuales, definiciones, listas, síntesis multi-fuente
 
-### Métricas
+### Métricas Computadas
+1. **Precisión de Citas**: % de respuestas con citas válidas
+2. **Precisión de Fuentes**: % de citas que coinciden con fuentes esperadas  
+3. **Recall de Fuentes**: % de fuentes esperadas citadas
+4. **Similitud Semántica**: Similitud coseno entre respuestas generadas y esperadas
+5. **Chunks Recuperados**: Efectividad de recuperación
 
-Ejecutar evaluación en [03_llm_generation_and_eval.ipynb](03_llm_generation_and_eval.ipynb):
-
-**1. Precisión de Citas (Citation Accuracy)**
-- % de respuestas que incluyen citas válidas
-- Mide si el sistema fundamenta respuestas en fuentes
-
-**2. Precisión de Fuentes (Source Precision)**
-- % de documentos citados que coinciden con fuentes esperadas
-- Mide relevancia de citas
-
-**3. Recall de Fuentes (Source Recall)**
-- % de fuentes esperadas que fueron citadas
-- Mide completitud de citas
-
-**4. Promedio de Chunks Recuperados**
-- Número promedio de chunks relevantes recuperados por pregunta
-- Indica efectividad de recuperación
-
-### Resultados Esperados
-Basado en el corpus y conjunto de prueba:
-- **Precisión de Citas:** ~90-100% (el sistema cita fuentes consistentemente)
-- **Precisión de Fuentes:** ~70-90% (la mayoría de citas son correctas)
-- **Recall de Fuentes:** ~60-80% (captura mayoría de fuentes relevantes)
+Ver resultados detallados arriba y en el notebook de evaluación.
 
 
 
@@ -290,7 +247,7 @@ embedder = Embedder()
 # Configurar LLM
 config = LLMConfig(
     api_key=SecretStr("tu-api-key"),
-    model_name="gemini-1.5-flash",
+    model_name="gemini-2.0-flash-001",
     temperature=0.0,
     top_k=5
 )

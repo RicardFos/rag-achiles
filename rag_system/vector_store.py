@@ -8,7 +8,7 @@ import faiss
 import numpy as np
 from pydantic import BaseModel, Field, ConfigDict
 
-from rag_system.models import DocumentChunk
+from rag_system.models import DocumentChunk, SearchResult
 
 
 class VectorStoreConfig(BaseModel):
@@ -33,31 +33,6 @@ class VectorStoreConfig(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
-
-
-class SearchResult(BaseModel):
-    """Result from vector similarity search."""
-
-    chunk: DocumentChunk = Field(..., description="Retrieved document chunk")
-    score: float = Field(..., ge=0.0, le=1.0, description="Bi-encoder similarity score")
-    rerank_score: Optional[float] = Field(
-        default=None, description="Cross-encoder rerank score (if re-ranking was used)"
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "chunk": {
-                    "text": "El presupuesto aprobado fue...",
-                    "document": "ResumenReunionGA_20231124.pdf",
-                    "page": 3,
-                    "chunk_index": 5,
-                },
-                "score": 0.89,
-                "rerank_score": 8.42,
-            }
-        }
-    )
 
 
 class VectorStore(ABC):

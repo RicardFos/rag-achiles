@@ -4,8 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from sentence_transformers import CrossEncoder
 import numpy as np
 
-from rag_system.vector_store import SearchResult
-from rag_system.models import DocumentChunk
+from rag_system.models import DocumentChunk, SearchResult
 
 
 class RerankerConfig(BaseModel):
@@ -16,7 +15,7 @@ class RerankerConfig(BaseModel):
         description="Cross-encoder model name",
     )
     top_n: int = Field(
-        default=5,
+        default=7,
         ge=1,
         le=20,
         description="Number of results to return after re-ranking",

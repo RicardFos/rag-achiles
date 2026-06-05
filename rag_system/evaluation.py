@@ -4,6 +4,7 @@ Evaluation utilities for RAG system.
 Provides metrics for assessing answer quality and citation accuracy.
 """
 import json
+import textwrap
 from pathlib import Path
 from typing import List, Dict, Tuple
 from sentence_transformers import util
@@ -262,3 +263,99 @@ def analyze_result(
     print(f"\n📊 Metrics:")
     print(f"   Source Precision: {prec*100:.0f}% | Source Recall: {rec*100:.0f}%")
     print(f"   Answer Similarity: {sim*100:.0f}%")
+
+
+def inspect_citations(response: LLMResponse, show_full_text: bool = False) -> None:
+    """
+    Print detailed inspection of citations from an LLM response.
+
+    Shows question, answer, and detailed information about each citation
+    including all chunks, scores, and text content.
+
+    Args:
+        response: LLMResponse object from RAG system
+        show_full_text: If True, show full chunk text; if False, show preview (default)
+    """
+    print("\n" + "=" * 80)
+    print("CITATION INSPECTION")
+    print("=" * 80)
+
+    # Show question
+    print(f"\n❓ Question:")
+    print(f"   {response.question}")
+
+    # Show answer with text wrapping
+    print(f"\n💬 Answer:")
+    answer_lines = response.answer.split('\n')
+    for line in answer_lines:
+        # Wrap each line to 76 characters (leaving 4 chars for indentation)
+        wrapped_lines = textwrap.wrap(line, width=76) if line.strip() else ['']
+        for wrapped in wrapped_lines:
+            print(f"   {wrapped}")
+
+    # Show metadata
+    print(f"\n📊 Metadata:")
+    print(f"   Total chunks retrieved: {response.num_chunks_retrieved}")
+    print(f"   Pages cited: {len(response.citations)}")
+    print(f"   Has citations: {response.has_citations}")
+    print(f"   Used reranking: {response.used_reranking}")
+
+    if not response.citations:
+        print("\n⚠️  No citations found")
+        return
+
+    # Show detailed citations
+    print("\n" + "=" * 80)
+    print(f"📚 DETAILED CITATIONS ({len(response.citations)} pages)")
+    print("=" * 80)
+
+    for i, cite in enumerate(response.citations, 1):
+        print(f"\n{'─' * 80}")
+        print(f"Citation {i}: {cite.document}, p.{cite.page}")
+        print(f"{'─' * 80}")
+        print(f"📄 Document: {cite.document}")
+        print(f"📖 Page: {cite.page}")
+        print(f"🔢 Number of chunks: {cite.num_chunks}")
+
+        # Show best scores
+        if cite.best_rerank_score:
+            print(f"🎯 Best Rerank Score: {cite.best_rerank_score:.4f}")
+        if cite.best_score:
+            print(f"📊 Best Retrieval Score: {cite.best_score:.4f}")
+
+        # Show individual chunks
+        print(f"\n📝 Chunks from this page:")
+        for j, search_result in enumerate(cite.chunks, 1):
+            chunk = search_result.chunk
+            print(f"\n  Chunk {j} (index={chunk.chunk_index}):")
+            print(f"    📊 Retrieval Score: {search_result.score:.4f}", end="")
+            if search_result.rerank_score:
+                print(f" | 🎯 Rerank Score: {search_result.rerank_score:.4f}")
+            else:
+                print()
+
+            # Show text
+            if show_full_text:
+                print(f"    📝 Full Text ({len(chunk.text)} chars):")
+                print(f"    {'-' * 76}")
+                for line in chunk.text.split('\n'):
+                    print(f"    {line}")
+                print(f"    {'-' * 76}")
+            else:
+                text_preview = chunk.text[:150] + "..." if len(chunk.text) > 150 else chunk.text
+                print(f"    📝 Text: \"{text_preview}\"")
+
+        # Show combined text if multiple chunks
+        if cite.num_chunks > 1:
+            combined_length = len(cite.all_text)
+            print(f"\n  📚 All chunks combined ({combined_length} chars):")
+            if show_full_text:
+                print(f"  {'-' * 78}")
+                for line in cite.all_text.split('\n'):
+                    print(f"  {line}")
+                print(f"  {'-' * 78}")
+            else:
+                preview = cite.all_text[:300] + "..." if combined_length > 300 else cite.all_text
+                print(f"  {preview}")
+
+    print("\n" + "=" * 80)
