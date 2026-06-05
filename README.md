@@ -1,5 +1,5 @@
 # Sistema RAG para Preguntas y Respuestas sobre Documentos
-**Prueba Técnica Achiles**
+**Prueba Técnica Achilles**
 
 He creado un sistema de RAG para responder preguntas sobre documentos PDF con citación de fuentes. Construido con una arquitectura orientada a objetos utilizando modelos Pydantic y seguridad de tipos en todo el código.
 
