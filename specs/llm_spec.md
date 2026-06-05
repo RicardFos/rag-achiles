@@ -6,7 +6,7 @@ Generate natural language answers to user questions based on retrieved context c
 ## Model Choice: Google Gemini (Free Tier)
 
 ### Why Gemini?
-- **Free tier**: 15 requests/min, 1M requests/day
+- **Free tier**: 15 requests/min, 500 requests/day
 - **No credit card required**: Easy signup for demo purposes
 - **Good quality**: Competitive with GPT-3.5 for RAG tasks
 - **LangChain support**: First-class integration
@@ -26,109 +26,70 @@ Uses **Pydantic configuration** and **class-based design** for consistency with 
 
 ## Data Models
 
-### Citation (Pydantic)
-```python
-from pydantic import BaseModel, Field, ConfigDict
+### Citation
+Represents a citation to a specific page in a document, grouping all chunks from that page.
 
-class Citation(BaseModel):
-    """Represents a citation to a source document."""
-    document: str = Field(..., description="Source document filename")
-    page: int = Field(..., ge=1, description="Page number in document")
-    text_snippet: str = Field(..., max_length=200, description="Relevant excerpt from source")
-    
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "document": "ResumenReunionGA_20231124.pdf",
-                "page": 3,
-                "text_snippet": "El presupuesto aprobado fue de 5 millones de euros..."
-            }
-        }
-    )
+**Core Concept:** A citation references a **(document, page)** pair, not individual chunks. When multiple chunks from the same page are retrieved, they're grouped into a single citation.
+
+**Fields:**
+- `document` — Source PDF filename
+- `page` — Page number (≥1)
+- `chunks` — List of SearchResult objects from this page
+
+**Computed Properties:**
+- `num_chunks` — Count of chunks from this page
+- `best_score` — Highest retrieval score among chunks
+- `best_rerank_score` — Highest rerank score (if re-ranking used)
+- `all_text` — Concatenated text from all chunks
+
+**Example:**
+```python
+{
+    "document": "ResumenReunionGA_20231124.pdf",
+    "page": 3,
+    "chunks": [
+        {"chunk": {...}, "score": 0.85, "rerank_score": 0.92},
+        {"chunk": {...}, "score": 0.78, "rerank_score": 0.88}
+    ]
+}
+# → One citation for page 3 with 2 chunks
 ```
 
-### LLMResponse (Pydantic)
-```python
-from typing import List
+**Design Rationale:** Citations in academic/professional contexts reference pages, not arbitrary text snippets. This structure mirrors that convention while preserving full chunk-level traceability.
 
-class LLMResponse(BaseModel):
-    """Complete response from RAG system."""
-    question: str = Field(..., description="Original user question")
-    answer: str = Field(..., description="Generated answer")
-    citations: List[Citation] = Field(default_factory=list, description="Source citations")
-    num_chunks_retrieved: int = Field(..., ge=0, description="Number of chunks retrieved")
-    has_citations: bool = Field(..., description="Whether answer includes valid citations")
-    used_reranking: bool = Field(default=False, description="Whether cross-encoder re-ranking was used")
-    
-    @property
-    def formatted_response(self) -> str:
-        """Format response with citations for display."""
-        response = f"**Answer:**\n{self.answer}\n"
-        
-        if self.citations:
-            response += f"\n**Sources ({len(self.citations)}):**\n"
-            for i, cite in enumerate(self.citations, 1):
-                response += f"{i}. {cite.document}, p.{cite.page}\n"
-                response += f"   \"{cite.text_snippet[:100]}...\"\n"
-        else:
-            response += "\n*No sources cited*"
-        
-        return response
-    
-    model_config = ConfigDict(validate_assignment=True)
-```
+### LLMResponse
+Complete RAG system output with answer, sources, and metadata.
 
-### LLMConfig (Pydantic)
-```python
-from pydantic import BaseModel, Field, ConfigDict, SecretStr
-from typing import Optional
+**Fields:**
+- `question` — Original user question
+- `answer` — Generated answer with inline citations
+- `citations` — List of Citation objects (grouped by page)
+- `num_chunks_retrieved` — Total chunks retrieved before grouping
+- `has_citations` — Boolean, whether answer cites sources
+- `used_reranking` — Boolean, whether cross-encoder was used
 
-class LLMConfig(BaseModel):
-    """Configuration for LLM generation."""
-    api_key: SecretStr = Field(..., description="Google API key")
-    model_name: str = Field(
-        default="gemini-2.0-flash-001",
-        description="Gemini model name"
-    )
-    temperature: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=2.0,
-        description="Sampling temperature (0=deterministic, 2=creative)"
-    )
-    max_output_tokens: int = Field(
-        default=1024,
-        ge=64,
-        le=8192,
-        description="Maximum tokens in generated response"
-    )
-    top_k: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Number of chunks to retrieve from vector store"
-    )
-    
-    model_config = ConfigDict(frozen=True)
-```
+**Computed Property:**
+- `formatted_response` — Human-readable display format with:
+  - Answer text
+  - Numbered source list with scores
+  - Text preview from each citation
 
-## Implementation
+### LLMConfig
+Configuration for Gemini LLM and retrieval behavior.
 
-### Imports (Top of File)
-```python
-import os
-from textwrap import dedent
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict, SecretStr
+**Fields:**
+- `api_key` — Google API key (SecretStr, not logged)
+- `model_name` — Gemini model (default: `gemini-2.0-flash-001`)
+- `temperature` — Sampling randomness (default: 0.0, range: 0.0-2.0)
+  - 0.0 = deterministic (best for factual Q&A)
+  - 0.7 = balanced creativity
+  - 2.0 = maximum variation
+- `max_output_tokens` — Response length cap (default: 1024, range: 64-8192)
+- `top_k` — Chunks to pass to LLM (default: 7, range: 1-20)
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
+Config is **immutable** (frozen) after creation.
 
-from rag_system.models import DocumentChunk, Citation
-from rag_system.vector_store import FAISSVectorStore, SearchResult
-from rag_system.embeddings import Embedder
-from rag_system.reranker import Reranker, RerankerConfig
-```
+## API Reference
 
 ### RAGGenerator Class
 ```python
@@ -447,7 +408,13 @@ print(response.answer)
 # Citations
 for cite in response.citations:
     print(f"Source: {cite.document}, p.{cite.page}")
-    print(f"Snippet: {cite.text_snippet}")
+    print(f"Number of chunks: {cite.num_chunks}")
+    print(f"Best score: {cite.best_score:.3f}")
+    
+    # Access individual chunks
+    for chunk_result in cite.chunks:
+        print(f"  Chunk {chunk_result.chunk.chunk_index}: {chunk_result.score:.3f}")
+        print(f"  Text: {chunk_result.chunk.text[:100]}...")
 
 # Metadata
 print(f"Retrieved {response.num_chunks_retrieved} chunks")
@@ -457,6 +424,36 @@ print(f"Used re-ranking: {response.used_reranking}")
 # Formatted output
 print(response.formatted_response)
 ```
+
+### Inspect Citations (Debugging Utility)
+```python
+from rag_system import inspect_citations
+
+response = rag.generate_answer(question)
+
+# Preview mode (truncated text)
+inspect_citations(response, show_full_text=False)
+
+# Full text mode (for verification)
+inspect_citations(response, show_full_text=True)
+```
+
+**Output includes:**
+- ❓ Original question
+- 💬 Generated answer with inline citations
+- 📊 Metadata (chunks retrieved, reranking used)
+- 📚 Per-citation details:
+  - Document and page
+  - Number of chunks from that page
+  - Best retrieval and rerank scores
+  - Individual chunk details with scores
+  - Full or preview text
+
+**Use cases:**
+- Debug citation extraction
+- Verify chunk grouping by page
+- Compare scores before/after reranking
+- Validate answer grounding
 
 ### JSON Serialization (for API)
 ```python
@@ -747,12 +744,12 @@ Sources (0):
 ❌ Should say "no tengo información"
 
 ## Dependencies
-```txt
-langchain>=0.1.0
-langchain-google-genai>=0.0.6
-google-generativeai>=0.3.0
-pydantic>=2.0.0
-```
+
+**Core Libraries:**
+- `langchain` + `langchain-google-genai` — LLM integration and message handling
+- `google-generativeai` — Gemini API client
+- `pydantic` — Data validation and configuration
+- Internal: `rag_system.vector_store`, `rag_system.embeddings`, `rag_system.reranker`
 
 ## Getting Google API Key
 

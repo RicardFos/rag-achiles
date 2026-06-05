@@ -23,38 +23,17 @@ Uses **Pydantic configuration** and **class-based design** for consistency with 
 
 ## Data Models
 
-### EmbeddingConfig (Pydantic)
-```python
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+### EmbeddingConfig
+Configuration for embedding generation behavior.
 
-class EmbeddingConfig(BaseModel):
-    """Configuration for embedding generation."""
-    model_name: str = Field(
-        default="paraphrase-multilingual-MiniLM-L12-v2",
-        description="HuggingFace model name"
-    )
-    device: str = Field(
-        default="cpu",
-        description="Device to run on: 'cpu' or 'cuda'"
-    )
-    batch_size: int = Field(
-        default=64,
-        ge=1,
-        le=256,
-        description="Number of texts to embed per batch"
-    )
-    normalize_embeddings: bool = Field(
-        default=True,
-        description="L2 normalize embeddings for cosine similarity"
-    )
-    show_progress: bool = Field(
-        default=False,
-        description="Show progress bar during batch embedding"
-    )
-    
-    model_config = ConfigDict(frozen=True)  # Immutable config
-```
+**Fields:**
+- `model_name` — HuggingFace model (default: `paraphrase-multilingual-MiniLM-L12-v2`)
+- `device` — Compute device: `"cpu"` or `"cuda"` (default: `"cpu"`)
+- `batch_size` — Texts per batch (default: 64, range: 1-256)
+- `normalize_embeddings` — L2 normalize for cosine similarity (default: `True`)
+- `show_progress` — Display progress bar (default: `False`)
+
+Config is **immutable** (frozen) after creation.
 
 ## API Reference
 

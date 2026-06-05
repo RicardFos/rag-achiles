@@ -35,81 +35,45 @@ Uses **Pydantic configuration** and **class-based design** for consistency with 
 
 ## Data Models
 
-### VectorStoreConfig (Pydantic)
-```python
-from pydantic import BaseModel, Field, ConfigDict
-from pathlib import Path
-from typing import Optional
+### VectorStoreConfig
+Configuration for FAISS vector store persistence and behavior.
 
-class VectorStoreConfig(BaseModel):
-    """Configuration for FAISS vector store."""
-    index_path: Path = Field(
-        default=Path("faiss_index/vector_index.faiss"),
-        description="Path to save/load FAISS index"
-    )
-    metadata_path: Path = Field(
-        default=Path("faiss_index/metadata.pkl"),
-        description="Path to save/load metadata"
-    )
-    similarity_threshold: float = Field(
-        default=0.7,
-        ge=0.0,
-        le=1.0,
-        description="Minimum similarity score for retrieval"
-    )
-    normalize_vectors: bool = Field(
-        default=True,
-        description="L2 normalize vectors before adding to index"
-    )
-    
-    model_config = ConfigDict(frozen=True)
+**Fields:**
+- `index_path` — FAISS index file location (default: `faiss_index/vector_index.faiss`)
+- `metadata_path` — Metadata pickle file (default: `faiss_index/metadata.pkl`)
+- `similarity_threshold` — Minimum score for retrieval (default: 0.7, range: 0.0-1.0)
+- `normalize_vectors` — L2 normalize before indexing (default: `True`)
+
+Config is **immutable** (frozen) after creation.
+
+### SearchResult
+Wraps a retrieved chunk with its similarity scores.
+
+**Fields:**
+- `chunk` — DocumentChunk object
+- `score` — Bi-encoder (vector) similarity score (0.0-1.0)
+- `rerank_score` _(optional)_ — Cross-encoder score if re-ranking was used
+
+**Example:**
+```python
+{
+    "chunk": {
+        "text": "El presupuesto aprobado fue...",
+        "document": "ResumenReunionGA_20231124.pdf",
+        "page": 3,
+        "chunk_index": 5
+    },
+    "score": 0.89,
+    "rerank_score": 0.95  # Added after re-ranking
+}
 ```
 
-### SearchResult (Pydantic)
-```python
-from rag_system.models import DocumentChunk
-from typing import Optional
+## API Reference
 
-class SearchResult(BaseModel):
-    """Result from vector similarity search."""
-    chunk: DocumentChunk = Field(..., description="Retrieved document chunk")
-    score: float = Field(..., ge=0.0, le=1.0, description="Bi-encoder similarity score")
-    rerank_score: Optional[float] = Field(
-        default=None, 
-        description="Cross-encoder rerank score (if re-ranking was used)"
-    )
-    
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "chunk": {
-                    "text": "El presupuesto aprobado fue...",
-                    "document": "ResumenReunionGA_20231124.pdf",
-                    "page": 3,
-                    "chunk_index": 5
-                },
-                "score": 0.89
-            }
-        }
-    )
-```
-
-## Implementation
-
-### Imports (Top of File)
-```python
-import os
-import pickle
-from pathlib import Path
-from typing import List, Optional
-from abc import ABC, abstractmethod
-
-import faiss
-import numpy as np
-from pydantic import BaseModel, Field, ConfigDict
-
-from rag_system.models import DocumentChunk
-```
+### Key Dependencies
+- **FAISS** (`faiss`) — Similarity search index
+- **NumPy** (`numpy`) — Vector operations
+- **Pickle** — Metadata persistence
 
 ### Abstract Base Class
 ```python

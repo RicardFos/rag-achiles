@@ -7,8 +7,10 @@ Usage:
 Environment:
     GOOGLE_API_KEY: Required for Gemini LLM (loaded from .env file)
 """
+
 import os
 import sys
+import textwrap
 from pathlib import Path
 from pydantic import SecretStr
 from dotenv import load_dotenv
@@ -60,16 +62,16 @@ def query_rag(question: str, use_reranking: bool = True) -> None:
 
     config = LLMConfig(
         api_key=SecretStr(api_key),
-        model_name="gemini-2.0-flash-001",
+        model_name="gemini-3.1-flash-lite",
         temperature=0.0,
-        top_k=5
+        top_k=7,
     )
 
     rag = RAGGenerator(
         vector_store=vector_store,
         embedder=embedder,
         config=config,
-        use_reranking=use_reranking
+        use_reranking=use_reranking,
     )
 
     print(f"✓ Loaded (re-ranking: {'enabled' if use_reranking else 'disabled'})\n")
@@ -84,15 +86,34 @@ def query_rag(question: str, use_reranking: bool = True) -> None:
     print("\n" + "=" * 80)
     print("ANSWER")
     print("=" * 80)
-    print(f"\n{response.answer}\n")
+    print()
+
+    # Wrap answer text to prevent horizontal scrolling
+    answer_lines = response.answer.split('\n')
+    for line in answer_lines:
+        wrapped_lines = textwrap.wrap(line, width=76) if line.strip() else ['']
+        for wrapped in wrapped_lines:
+            print(f"  {wrapped}")
+    print()
 
     if response.citations:
         print("=" * 80)
         print(f"SOURCES ({len(response.citations)})")
         print("=" * 80)
         for i, cite in enumerate(response.citations, 1):
-            print(f"\n{i}. {cite.document}, página {cite.page}")
-            print(f'   "{cite.text_snippet}"')
+            print(f"\n{i}. {cite.document}, página {cite.page} ({cite.num_chunks} chunk{'s' if cite.num_chunks > 1 else ''})")
+
+            # Show best scores
+            if cite.best_rerank_score:
+                print(f"   Rerank score: {cite.best_rerank_score:.3f}")
+            elif cite.best_score:
+                print(f"   Retrieval score: {cite.best_score:.3f}")
+
+            # Show text preview from first chunk
+            if cite.chunks:
+                first_text = cite.chunks[0].chunk.text
+                text_preview = first_text[:150] + "..." if len(first_text) > 150 else first_text
+                print(f'   "{text_preview}"')
     else:
         print("\n⚠ No citations found")
 
@@ -111,7 +132,9 @@ if __name__ == "__main__":
         print("Usage: python query_rag.py <question> [--no-rerank]")
         print("\nExamples:")
         print('  python query_rag.py "¿Cuándo fue la primera reunión?"')
-        print('  python query_rag.py "¿Qué es la Escuela de Gobierno Abierto?" --no-rerank')
+        print(
+            '  python query_rag.py "¿Qué es la Escuela de Gobierno Abierto?" --no-rerank'
+        )
         sys.exit(1)
 
     question_text = sys.argv[1]

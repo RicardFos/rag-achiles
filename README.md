@@ -6,7 +6,7 @@ He creado un sistema de RAG para responder preguntas sobre documentos PDF con ci
 Para asegurar el uso sencillo y gratuito desde cualquier PC, he usado la librería sentence_transformers de HuggingFace para usar modelos de embeddings y reranker, ya que son modelos ligeros y gratuitos que se pueden ejecutar en local con buenos resultados. He usado FAISS (Meta, open source) como base de datos vectorial gratuita en local, creando la clase abstracta VectorStore para poder implementar otra base de datos vectorial si fuese necesario. También he optado por Gemini como proveedor LLM dado que facilita API keys gratuitas para testear sin necesidad de tarjeta de crédito. 
 
 Los metadatos de los chunks se guardan en un archivo .pkl junto al vector store, y se recuperan como objetos pydantic con toda la información del chunk incluida.
-Se usa cosine similarity con un threshold por defecto de 0.6 entre los embeddings del input del usuario y los embeddings de los chunks para obtener los top 20, y luego se usa el reranker para elegir los 5 mejores matches de esos 20.
+Se usa cosine similarity con un threshold por defecto de 0.6 entre los embeddings del input del usuario y los embeddings de los chunks para obtener los top 20, y luego se usa el reranker para elegir los 7 mejores matches de esos 20.
 
 He creado 3 notebooks que deben ser ejecutadas en orden. 
 La primera muestra el proceso de indexación, cargando los documentos, separándolos en chunks, generando los embeddings y guardandolo en la base de datos vectorial. 
@@ -15,25 +15,6 @@ La última notebook muestra el proceso de pregunta-retrieval-respuesta usando LL
 
 Todo el código y notebooks han sido escritos en inglés (mi idioma principal para programar), aunque los documentos y system prompt del asistente LLM están escritos en castellano para este ejemplo en concreto. He usado el asistente de código Claude Code para ayudarme a implementar mis requisitos, usando spec-drive-development, escribiendo requisitos claros, pasos y estructura del código. Las notebooks se han aprovechado como testeo de los métodos y clases además de mostrar claramente cada paso del proceso RAG.
 
-## 🎯 Puntos Clave
-
-- ✅ **93% de precisión en citación** - respuestas fundamentadas en fuentes
-- 🔄 **Re-ranking en dos etapas** - bi-encoder + cross-encoder mejora relevancia
-- 🌍 **Soporte español** - embeddings multilingües optimizados
-- 🆓 **Completamente gratuito** - sin API keys de pago requeridas
-- 📦 **Todo local** - embeddings, vector DB y reranker en tu máquina
-
-## Características
-
-- 📄 **Ingesta de PDFs**: Extrae texto de PDFs con metadatos de página
-- ✂️ **Chunking Inteligente**: División recursiva por caracteres con solapamiento para preservar contexto
-- 🔢 **Embeddings Semánticos**: Sentence-transformers multilingües para comprensión de documentos en español
-- 🗄️ **Búsqueda Vectorial**: Búsqueda por similitud basada en FAISS con similitud coseno
-- 🎯 **Re-ranking con Cross-Encoder**: Recuperación en dos etapas (bi-encoder → cross-encoder) para mejorar relevancia
-- 🤖 **Generación con LLM**: Integración con Gemini via LangChain con extracción de citas
-- 📊 **Framework de Evaluación**: Métricas automatizadas sobre conjunto de prueba (precisión de citas, precision/recall de fuentes)
-- 🛠️ **Herramientas CLI**: Scripts end-to-end para indexado y consultas
-- 📓 **Notebooks de Demo**: Tres notebooks Jupyter completos demostrando cada etapa del pipeline
 
 ## Arquitectura
 
@@ -44,12 +25,12 @@ Todo el código y notebooks han sido escritos en inglés (mi idioma principal pa
        │ Parser (PyMuPDF)
        ↓
 ┌─────────────────────┐
-│ Documentos Chunked  │ (recursivo, 768 tokens, 150 overlap)
+│ Documentos Chunked  │ (recursivo, 512 tokens, 50 overlap)
 └──────┬──────────────┘
        │ Embeddings (paraphrase-multilingual-MiniLM-L12-v2)
        ↓
 ┌──────────────────────┐
-│  FAISS Vector Store  │ (~500 chunks, IndexFlatIP)
+│  FAISS Vector Store  │ (~620 chunks, IndexFlatIP)
 └──────┬───────────────┘
        │
        │  ┌──────────────────────┐
@@ -62,7 +43,7 @@ Todo el código y notebooks han sido escritos en inglés (mi idioma principal pa
            │
            ↓
 ┌──────────────────────┐
-│  Recuperación Etapa 2│ Cross-encoder: Re-ranking a Top-5
+│  Recuperación Etapa 2│ Cross-encoder: Re-ranking a Top-7
 └──────────┬───────────┘ (cross-encoder/ms-marco-MiniLM-L-12-v2)
            │
            ↓
@@ -96,7 +77,7 @@ pip install -r requirements.txt
 
 Obtener una API key gratuita desde [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-**Opción 1: Archivo .env (Recomendado)**
+
 ```bash
 # Copiar el archivo de ejemplo
 cp .env.example .env
@@ -105,22 +86,10 @@ cp .env.example .env
 GOOGLE_API_KEY=tu-api-key-aqui
 ```
 
-**Opción 2: Variable de entorno**
-
-Linux/Mac:
-```bash
-export GOOGLE_API_KEY='tu-api-key-aqui'
-```
-
-Windows PowerShell:
-```powershell
-$env:GOOGLE_API_KEY='tu-api-key-aqui'
-```
-
 ### 3. Indexar Documentos
 
 ```bash
-python index_documents.py pdfs/
+python index_documents.py ./pdfs
 ```
 
 Esto:
@@ -132,19 +101,15 @@ Esto:
 ```
 📁 Found 9 PDF files in pdfs/
 ✓ Parsed 9 documents
-✓ Generated ~500 chunks
-✓ Generated ~500 embeddings
-✓ Saved index with ~500 vectors
+✓ Generated ~620 chunks
+✓ Generated ~620 embeddings
+✓ Saved index with ~620 vectors
 ```
 
 ### 4. Consultar el Sistema
 
 ```bash
-# Con re-ranking (por defecto)
-python query_rag.py "¿Cuál es la misión del grupo motor?"
-
-# Sin re-ranking
-python query_rag.py "¿Qué es la Escuela de Gobierno Abierto?" --no-rerank
+python query_rag.py "¿Qué es la Escuela de Gobierno Abierto y cuál es su objetivo?"
 ```
 
 ## 📋 Especificaciones Técnicas
@@ -185,22 +150,6 @@ Tres notebooks de Jupyter completos que demuestran el pipeline completo:
 - Cómputo de métricas de calidad
 - Inspección detallada de resultados
 
-## 📊 Resultados de Evaluación
-
-Evaluación sobre 15 preguntas del conjunto de prueba (`eval.jsonl`):
-
-| Métrica | Resultado |
-|---------|-----------|
-| **Precisión de Citas** | 93.3% (14/15 respuestas con citas) |
-| **Precisión de Fuentes** | 63.3% |
-| **Recall de Fuentes** | 63.3% |
-| **Similitud Semántica** | 66.0% |
-| **Chunks Recuperados (promedio)** | 3.6 |
-
-✅ El sistema cita fuentes consistentemente y genera respuestas fundamentadas en documentos.
-
-Ver análisis completo en [03_llm_generation_and_eval.ipynb](03_llm_generation_and_eval.ipynb).
-
 ## Evaluación
 
 ### Conjunto de Prueba
@@ -215,58 +164,26 @@ Ver análisis completo en [03_llm_generation_and_eval.ipynb](03_llm_generation_a
 4. **Similitud Semántica**: Similitud coseno entre respuestas generadas y esperadas
 5. **Chunks Recuperados**: Efectividad de recuperación
 
-Ver resultados detallados arriba y en el notebook de evaluación.
+### 📊 Resultados
 
+Evaluación sobre 15 preguntas del conjunto de prueba (`eval.jsonl`):
 
+| Métrica | Resultado |
+|---------|-----------|
+| **Precisión de Citas** | 93.3% (14/15 respuestas con citas) |
+| **Precisión de Fuentes** | 76.7% |
+| **Recall de Fuentes** | 80.0% |
+| **Similitud Semántica** | 71.8% |
+| **Chunks Recuperados (promedio)** | 4.5 |
 
-## Ejemplos de Uso
+✅ **Tasa de éxito: 87%** (13/15 preguntas respondidas correctamente)
 
-### Indexar nuevos documentos
-```bash
-python index_documents.py ruta/a/pdfs/
-```
+El sistema cita fuentes consistentemente y genera respuestas fundamentadas en documentos. Las 2 preguntas que no se responden correctamente representan casos límite realistas:
 
-### Consultar desde CLI
-```bash
-# Por defecto: con re-ranking
-python query_rag.py "¿Cuándo fue la primera reunión del grupo motor?"
+- **Pregunta 5** (995 personas): Dificultad para distinguir entre múltiples consultas públicas similares mencionadas en diferentes documentos
+- **Pregunta 9** (THIVIC): Término poco frecuente cuya definición no aparece consistentemente en los top-20 candidatos de recuperación
 
-# Sin re-ranking (más rápido, potencialmente menos preciso)
-python query_rag.py "¿Qué es el marco estratégico?" --no-rerank
-```
+Estos casos representan áreas de mejora futura y demuestran la evaluación honesta del sistema en escenarios del mundo real.
 
-### Uso programático
-```python
-from rag_system import RAGGenerator, LLMConfig, FAISSVectorStore, Embedder
-from pydantic import SecretStr
-
-# Cargar componentes
-vector_store = FAISSVectorStore()  # Auto-carga desde disco
-embedder = Embedder()
-
-# Configurar LLM
-config = LLMConfig(
-    api_key=SecretStr("tu-api-key"),
-    model_name="gemini-2.0-flash-001",
-    temperature=0.0,
-    top_k=5
-)
-
-# Inicializar generador RAG
-rag = RAGGenerator(
-    vector_store=vector_store,
-    embedder=embedder,
-    config=config,
-    use_reranking=True  # Habilitar cross-encoder
-)
-
-# Generar respuesta
-response = rag.generate_answer("¿Qué es la Escuela de Gobierno Abierto?")
-
-print(response.answer)
-print(f"Citas: {len(response.citations)}")
-for cite in response.citations:
-    print(f"  - {cite.document}, página {cite.page}")
-```
-
+Ver análisis completo en [03_llm_generation_and_eval.ipynb](03_llm_generation_and_eval.ipynb).
 

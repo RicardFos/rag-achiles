@@ -19,8 +19,8 @@ Cross-encoders process query + document **together**:
 
 ### Two-Stage Strategy
 ```
-Stage 1 (Fast): Bi-encoder retrieves top-20 candidates from 619 chunks
-Stage 2 (Accurate): Cross-encoder re-ranks 20 candidates → top-5 for LLM
+Stage 1 (Fast): Bi-encoder retrieves top-20 candidates from ~620 chunks
+Stage 2 (Accurate): Cross-encoder re-ranks 20 candidates → top-7 for LLM
 ```
 
 **Result**: Better precision for the LLM without sacrificing recall.
@@ -231,8 +231,8 @@ Total for 20 pairs: 200ms (can't be cached!)
 ```
 
 **This is why we use a two-stage pipeline**:
-1. Bi-encoder filters 619 → 20 (fast, cached)
-2. Cross-encoder re-ranks 20 → 5 (slow, but only 20 pairs)
+1. Bi-encoder filters ~620 → 20 (fast, cached)
+2. Cross-encoder re-ranks 20 → 7 (slow, but only 20 pairs)
 
 ## Model Choice: `cross-encoder/ms-marco-MiniLM-L-12-v2`
 
@@ -255,48 +255,27 @@ Uses **Pydantic configuration** and **class-based design** for consistency:
 
 ## Data Models
 
-### RerankerConfig (Pydantic)
-```python
-from pydantic import BaseModel, Field, ConfigDict
+### RerankerConfig
+Configuration for cross-encoder re-ranker behavior.
 
-class RerankerConfig(BaseModel):
-    """Configuration for cross-encoder re-ranker."""
-    model_name: str = Field(
-        default="cross-encoder/ms-marco-MiniLM-L-12-v2",
-        description="Cross-encoder model name"
-    )
-    top_n: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Number of results to return after re-ranking"
-    )
-    batch_size: int = Field(
-        default=32,
-        ge=1,
-        le=64,
-        description="Batch size for scoring"
-    )
-    device: str = Field(
-        default="cpu",
-        description="Device to run on: 'cpu' or 'cuda'"
-    )
-    
-    model_config = ConfigDict(frozen=True)
-```
+**Fields:**
+- `model_name` — Cross-encoder model (default: `cross-encoder/ms-marco-MiniLM-L-12-v2`)
+- `top_n` — Results to return after re-ranking (default: 7, range: 1-20)
+- `batch_size` — Pairs to score per batch (default: 32, range: 1-64)
+- `device` — Compute device: `"cpu"` or `"cuda"` (default: `"cpu"`)
 
-### RerankResult (Pydantic)
-```python
-from rag_system.models import DocumentChunk
+Config is **immutable** (frozen) after creation.
 
-class RerankResult(BaseModel):
-    """Result after re-ranking with cross-encoder score."""
-    chunk: DocumentChunk = Field(..., description="Document chunk")
-    retrieval_score: float = Field(..., description="Original bi-encoder similarity score")
-    rerank_score: float = Field(..., description="Cross-encoder relevance score")
-    rank: int = Field(..., ge=1, description="Final rank after re-ranking")
-    
-    model_config = ConfigDict(
+### RerankResult
+Re-ranked search result with both bi-encoder and cross-encoder scores.
+
+**Fields:**
+- `chunk` — DocumentChunk object
+- `retrieval_score` — Original bi-encoder (vector) similarity
+- `rerank_score` — Cross-encoder relevance score
+- `rank` — Final position after re-ranking (≥1)
+
+**Model Config:**
         json_schema_extra={
             "example": {
                 "chunk": {
@@ -315,19 +294,12 @@ class RerankResult(BaseModel):
 
 **Note**: Cross-encoder scores are **not normalized** (typically range from -10 to +10). Higher is better.
 
-## Implementation
+## API Reference
 
-### Imports (Top of File)
-```python
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
-
-from sentence_transformers import CrossEncoder
-import numpy as np
-
-from rag_system.models import DocumentChunk
-from rag_system.vector_store import SearchResult
-```
+### Key Dependencies
+- **sentence-transformers** — CrossEncoder for query-document scoring
+- **NumPy** — Score normalization
+- Internal: `SearchResult`, `DocumentChunk` from `rag_system.models`
 
 ### Reranker Class
 ```python
@@ -462,8 +434,8 @@ class RAGGenerator:
                 top_k=20
             )
             
-            # Re-rank to top-5
-            reranked = self.reranker.rerank(question, candidates, top_n=5)
+            # Re-rank to top-7
+            reranked = self.reranker.rerank(question, candidates, top_n=7)
             
             # Convert back to SearchResult format
             results = [
@@ -518,10 +490,10 @@ candidates = vector_store.search(query_emb, top_k=20)
 
 print(f"Retrieved {len(candidates)} candidates")
 
-# Re-rank to top-5
-reranked = reranker.rerank(query, candidates, top_n=5)
+# Re-rank to top-7
+reranked = reranker.rerank(query, candidates, top_n=7)
 
-print(f"\nTop-5 after re-ranking:")
+print(f"\nTop-7 after re-ranking:")
 for result in reranked:
     print(f"Rank {result.rank}: {result.chunk.document}, p.{result.chunk.page}")
     print(f"  Retrieval score: {result.retrieval_score:.3f}")
@@ -665,12 +637,12 @@ print(f"Rank correlation: {correlation:.3f}")
 ### 1. Candidate Pool Size
 ```python
 # Good: Retrieve 2-4x more than final top_n
-candidates = vector_store.search(query_emb, top_k=20)  # Want top-5 after rerank
-reranked = reranker.rerank(query, candidates, top_n=5)
+candidates = vector_store.search(query_emb, top_k=20)  # Want top-7 after rerank
+reranked = reranker.rerank(query, candidates, top_n=7)
 
 # Too few: No room for re-ranker to improve
-candidates = vector_store.search(query_emb, top_k=6)  # Only 1 extra candidate
-reranked = reranker.rerank(query, candidates, top_n=5)  # Limited benefit
+candidates = vector_store.search(query_emb, top_k=8)  # Only 1 extra candidate
+reranked = reranker.rerank(query, candidates, top_n=7)  # Limited benefit
 
 # Too many: Slower with diminishing returns
 candidates = vector_store.search(query_emb, top_k=100)  # Overkill

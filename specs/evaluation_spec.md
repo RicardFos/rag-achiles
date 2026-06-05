@@ -160,9 +160,9 @@ Avg Chunks = Σ(chunks_per_question) / Total questions
 
 **Target**: 3-5 chunks (with re-ranking)
 
-## Implementation
+## API Reference
 
-### API Reference
+### Key Functions
 
 ```python
 def load_eval_data(eval_file: Path) -> list:
@@ -320,6 +320,111 @@ Based on the corpus (9 PDFs, 619 chunks) and test set (10 questions):
 - ✅ Re-ranking reducing from 20 → 5
 - ✅ Providing sufficient context to LLM
 - ✅ Not overwhelming LLM with irrelevant chunks
+
+## Citation Inspection Utility
+
+### inspect_citations()
+
+New utility function for detailed citation analysis:
+
+```python
+from rag_system import inspect_citations
+
+response = rag.generate_answer(question)
+
+# Preview mode (truncated text)
+inspect_citations(response, show_full_text=False)
+
+# Full text mode (complete chunks)
+inspect_citations(response, show_full_text=True)
+```
+
+### Output Format
+
+**Displays:**
+- ❓ Original question
+- 💬 Generated answer with inline citations
+- 📊 Metadata:
+  - Total chunks retrieved
+  - Pages cited
+  - Citations present (yes/no)
+  - Reranking used (yes/no)
+- 📚 Per-citation details:
+  - Document name
+  - Page number
+  - Number of chunks from that page
+  - Best retrieval score
+  - Best rerank score
+  - Individual chunk details:
+    - Chunk index in document
+    - Individual retrieval score
+    - Individual rerank score
+    - Text content (preview or full)
+  - Combined text (when multiple chunks from same page)
+
+### Use Cases
+
+**Debugging:**
+- Verify citation extraction works correctly
+- Check if chunks from same page are grouped
+- Identify missing citations
+
+**Score Analysis:**
+- Compare retrieval vs rerank scores
+- Identify low-scoring but cited chunks
+- Validate reranking improves relevance
+
+**Answer Verification:**
+- Read full chunk text to verify grounding
+- Check if answer matches source content
+- Identify hallucination or misinterpretation
+
+**Example Output:**
+```
+CITATION INSPECTION
+================================================================================
+
+❓ Question:
+   ¿Qué es el laboratorio THIVIC?
+
+💬 Answer:
+   THIVIC es el Laboratorio de Innovación Social del Ayuntamiento...
+   [Resumen_grupo_motor_14032025.pdf, p.3]
+
+📊 Metadata:
+   Total chunks retrieved: 5
+   Pages cited: 1
+   Has citations: True
+   Used reranking: True
+
+================================================================================
+📚 DETAILED CITATIONS (1 pages)
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+Citation 1: Resumen_grupo_motor_14032025.pdf, p.3
+────────────────────────────────────────────────────────────────────────────────
+📄 Document: Resumen_grupo_motor_14032025.pdf
+📖 Page: 3
+🔢 Number of chunks: 2
+🎯 Best Rerank Score: 0.9234
+📊 Best Retrieval Score: 0.8456
+
+📝 Chunks from this page:
+
+  Chunk 1 (index=17):
+    📊 Retrieval Score: 0.8456 | 🎯 Rerank Score: 0.9234
+    📝 Text: "El Laboratorio de Innovación Social THIVIC es el espacio..."
+
+  Chunk 2 (index=18):
+    📊 Retrieval Score: 0.7891 | 🎯 Rerank Score: 0.8567
+    📝 Text: "El 7 de febrero de 2025 se celebró la primera sesión..."
+
+  📚 All chunks combined (842 chars):
+  El Laboratorio de Innovación Social THIVIC es el espacio de innovación...
+  
+  El 7 de febrero de 2025 se celebró la primera sesión del Primer taller...
+```
 
 ## Evaluation in Notebook
 

@@ -5,8 +5,8 @@ Convert PDF documents into searchable text chunks with page number tracking for 
 
 ## Requirements
 - **Chunking method**: Recursive by tokens with overlap (as per assignment)
-- **Chunk size**: 512 tokens
-- **Overlap**: 50 tokens
+- **Chunk size**: 512 tokens (default)
+- **Overlap**: 50 tokens (default, ~10% overlap)
 - **Page tracking**: Each chunk must preserve source page number
 - **Text cleaning**: Remove PDF artifacts, normalize whitespace
 
@@ -20,84 +20,52 @@ Uses **Pydantic models** for type safety, validation, and easy serialization:
 
 ## Data Models
 
-### DocumentChunk (Pydantic)
-```python
-from pydantic import BaseModel, Field, ConfigDict
+### DocumentChunk
+Represents a single text chunk with metadata for citation purposes.
 
-class DocumentChunk(BaseModel):
-    """Represents a single chunk of text from a document."""
-    text: str = Field(..., description="Chunk text content")
-    document: str = Field(..., description="Source document filename")
-    page: int = Field(..., ge=1, description="Page number in original PDF")
-    chunk_index: int = Field(..., ge=0, description="Sequential chunk number")
-    
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "text": "El presupuesto aprobado fue...",
-                "document": "ResumenReunionGA_20231124.pdf",
-                "page": 3,
-                "chunk_index": 5
-            }
-        }
-    )
+**Fields:**
+- `text` — Chunk text content
+- `document` — Source PDF filename
+- `page` — Page number in original PDF (≥1)
+- `chunk_index` — Sequential chunk number within document (≥0)
+
+**Example:**
+```python
+{
+    "text": "El presupuesto aprobado fue...",
+    "document": "ResumenReunionGA_20231124.pdf",
+    "page": 3,
+    "chunk_index": 5
+}
 ```
 
-### ParsedDocument (Pydantic)
-```python
-from typing import List, Optional
+### ParsedDocument
+Container for all chunks from a single PDF with processing metadata.
 
-class ParsedDocument(BaseModel):
-    """Represents a fully parsed PDF document with chunks."""
-    filename: str = Field(..., description="PDF filename")
-    total_pages: int = Field(..., ge=1, description="Total number of pages")
-    total_chunks: int = Field(..., ge=0, description="Total number of chunks created")
-    chunks: List[DocumentChunk] = Field(default_factory=list)
-    
-    # Optional metadata
-    file_size_bytes: Optional[int] = None
-    processing_time_seconds: Optional[float] = None
-    
-    @property
-    def chunks_per_page(self) -> float:
-        """Average chunks per page."""
-        return self.total_chunks / self.total_pages if self.total_pages > 0 else 0
-    
-    def get_chunks_by_page(self, page: int) -> List[DocumentChunk]:
-        """Filter chunks by page number."""
-        return [c for c in self.chunks if c.page == page]
-    
-    def get_chunk_texts(self) -> List[str]:
-        """Extract all chunk texts for embedding."""
-        return [c.text for c in self.chunks]
-    
-    model_config = ConfigDict(validate_assignment=True)
-```
+**Fields:**
+- `filename` — PDF filename
+- `total_pages` — Total pages in PDF
+- `total_chunks` — Total chunks created
+- `chunks` — List of DocumentChunk objects
+- `file_size_bytes` _(optional)_ — File size
+- `processing_time_seconds` _(optional)_ — Parse duration
 
-### ParserConfig (Pydantic)
-```python
-class ParserConfig(BaseModel):
-    """Configuration for document parsing."""
-    chunk_size: int = Field(default=512, ge=50, le=2000)
-    chunk_overlap: int = Field(default=50, ge=0, le=500)
-    separators: List[str] = Field(default=["\n\n", "\n", " ", ""])
-    
-    model_config = ConfigDict(frozen=True)  # Immutable config
-```
+**Utility Methods:**
+- `chunks_per_page` — Average chunks/page
+- `get_chunks_by_page(page)` — Filter chunks by page
+- `get_chunk_texts()` — Extract text list for embedding
 
-## Implementation
+### ParserConfig
+Chunking configuration parameters.
 
-### Imports (Top of File)
-```python
-import re
-import time
-from pathlib import Path
-from typing import List, Optional
+**Fields:**
+- `chunk_size` — Tokens per chunk (default: 512, range: 50-2000)
+- `chunk_overlap` — Overlap tokens (default: 50, range: 0-500)
+- `separators` — Split boundaries (default: `["\n\n", "\n", " ", ""]`)
 
-from pydantic import BaseModel, Field, ConfigDict
-from PyPDF2 import PdfReader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-```
+Config is **immutable** (frozen) after creation.
+
+## API Reference
 
 ### DocumentParser Class
 ```python
@@ -353,6 +321,6 @@ Chunk 3:                           [CCCCCCCCCC][DDDDDDDDDD]
 
 ## Expected Output
 For 9 Madrid council PDFs (~6MB total):
-- **Total chunks**: ~400-600 chunks
+- **Total chunks**: ~600-650 chunks (with 512 tokens, 50 overlap)
 - **Processing time**: ~30-60 seconds (including embedding)
 - **Average chunk size**: ~400-500 characters (≈512 tokens)
