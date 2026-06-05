@@ -1,9 +1,7 @@
 import numpy as np
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
-from langchain_huggingface import HuggingFaceEmbeddings
-from tqdm import tqdm
+from sentence_transformers import SentenceTransformer
 
 
 class EmbeddingConfig(BaseModel):
@@ -29,7 +27,7 @@ class EmbeddingConfig(BaseModel):
 
 class Embedder:
     """
-    Generates embeddings using sentence-transformers via LangChain.
+    Generates embeddings using sentence-transformers.
 
     Encapsulates model lifecycle, batch processing, and provides
     consistent interface for document and query embedding.
@@ -52,10 +50,9 @@ class Embedder:
         """
         print(f"Loading embedding model: {self.config.model_name}...")
 
-        self.model = HuggingFaceEmbeddings(
-            model_name=self.config.model_name,
-            model_kwargs={"device": self.config.device},
-            encode_kwargs={"normalize_embeddings": self.config.normalize_embeddings},
+        self.model = SentenceTransformer(
+            self.config.model_name,
+            device=self.config.device
         )
 
         # Now self.model is set, so self.dimension works
@@ -71,18 +68,16 @@ class Embedder:
         Returns:
             NumPy array of embeddings, shape (len(texts), dimension)
         """
-        all_embeddings = []
+        # sentence-transformers.encode() handles batching internally
+        embeddings = self.model.encode(
+            texts,
+            batch_size=self.config.batch_size,
+            show_progress_bar=self.config.show_progress,
+            normalize_embeddings=self.config.normalize_embeddings,
+            convert_to_numpy=True
+        )
 
-        iterator = range(0, len(texts), self.config.batch_size)
-        if self.config.show_progress:
-            iterator = tqdm(iterator, desc="Embedding documents", unit="batch")
-
-        for i in iterator:
-            batch = texts[i : i + self.config.batch_size]
-            batch_embeddings = self.model.embed_documents(batch)
-            all_embeddings.extend(batch_embeddings)
-
-        return np.array(all_embeddings, dtype=np.float32)
+        return embeddings.astype(np.float32)
 
     def embed_query(self, text: str) -> np.ndarray:
         """
@@ -97,14 +92,17 @@ class Embedder:
         Returns:
             NumPy array embedding, shape (dimension,)
         """
-        embedding = self.model.embed_query(text)
-        return np.array(embedding, dtype=np.float32)
+        embedding = self.model.encode(
+            text,
+            normalize_embeddings=self.config.normalize_embeddings,
+            convert_to_numpy=True
+        )
+        return embedding.astype(np.float32)
 
     @property
     def dimension(self) -> int:
         """Get the dimensionality of embeddings."""
-        dummy_embedding = self.model.embed_query("test")
-        return len(dummy_embedding)
+        return self.model.get_embedding_dimension()
 
     def get_stats(self) -> dict:
         """

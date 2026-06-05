@@ -18,6 +18,17 @@ from rag_system.vector_store import FAISSVectorStore, VectorStoreConfig, SearchR
 from rag_system.reranker import Reranker, RerankerConfig, RerankResult
 from rag_system.llm import RAGGenerator, LLMConfig, LLMResponse
 
+# Evaluation
+from rag_system.evaluation import (
+    load_eval_data,
+    compute_citation_accuracy,
+    compute_source_metrics,
+    compute_answer_similarity,
+    evaluate_rag_system,
+    print_evaluation_results,
+    analyze_result
+)
+
 __all__ = [
     # Models
     "DocumentChunk",
@@ -41,4 +52,12 @@ __all__ = [
     # LLM
     "RAGGenerator",
     "LLMConfig",
+    # Evaluation
+    "load_eval_data",
+    "compute_citation_accuracy",
+    "compute_source_metrics",
+    "compute_answer_similarity",
+    "evaluate_rag_system",
+    "print_evaluation_results",
+    "analyze_result",
 ]
