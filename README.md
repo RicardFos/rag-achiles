@@ -69,8 +69,11 @@ Todo el código y notebooks han sido escritos en inglés (mi idioma principal pa
 git clone <repository-url>
 cd rag_achiles
 
+
+# instalar uv para instalación de dependencias rápida
+pip install uv 
 # Instalar dependencias
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 ```
 
 ### 2. Configurar API Key de Gemini
