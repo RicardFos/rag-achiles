@@ -86,7 +86,7 @@ Obtener una API key gratuita desde [Google AI Studio](https://aistudio.google.co
 cp .env.example .env
 
 # Editar .env y añadir tu API key
-GOOGLE_API_KEY=tu-api-key-aqui
+GOOGLE_API_KEY='tu-api-key-aqui'
 ```
 
 ### 3. Indexar Documentos
