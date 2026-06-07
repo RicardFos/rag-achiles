@@ -100,18 +100,18 @@ python query_rag.py "¿Qué presupuesto se aprobó?"
 ## Key Technical Decisions
 
 - **Local-first approach** - Embeddings and vector DB run locally (no external services except LLM)
-- **Two-stage retrieval** - Bi-encoder (fast, 619 docs) → Cross-encoder (accurate, 20 candidates)
+- **Two-stage retrieval** - Bi-encoder (fast, 619 chunks) → Cross-encoder (accurate, 20 candidates)
 - **Spanish language support** - Multilingual models for embeddings and LLM
 - **Citation enforcement** - Prompt engineering ensures grounded responses with source attribution
 - **Free tier friendly** - Gemini free API, no costs for demo/evaluation
 
 ## Evaluation Strategy
 
-Test set (`eval.jsonl`): 10 question-answer pairs with expected source passages
+Test set (`eval.jsonl`): question-answer pairs with expected source passages
 
 **Metrics:**
-- Citation Accuracy: % responses with valid citations (target: ≥90%)
-- Source Precision: % cited documents that are correct (target: ≥70%)
-- Source Recall: % expected sources that were cited (target: ≥60%)
+- Citation Accuracy: % responses with valid citations 
+- Source Precision: % cited documents that are correct
+- Source Recall: % expected sources that were cited 
 
 See [evaluation_spec.md](evaluation_spec.md) for detailed methodology.

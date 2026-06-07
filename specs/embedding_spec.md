@@ -152,28 +152,6 @@ class Embedder:
         """
 ```
 
-## Performance Characteristics
-
-### Speed (CPU, typical laptop)
-- **Model loading**: 2-3 seconds (first time only)
-- **Embedding rate**: 100-500 chunks/second
-- **Single query**: <0.1 second
-- **500 chunks**: 5-10 seconds total
-
-### Memory Usage
-- **Model in memory**: ~500MB
-- **500 embeddings (384 dim)**: ~1.5MB
-- **Total RAM**: ~1GB for complete system
-
-### Comparison to API Embeddings
-| Metric | Local (sentence-transformers) | API (Gemini/OpenAI) |
-|--------|-------------------------------|---------------------|
-| Cost | Free | Free tier limited |
-| Speed | ~10ms per embedding | ~200-500ms (network) |
-| Rate limits | None | 15-60 requests/min |
-| Offline | ✅ Yes | ❌ No |
-| Setup | Model download (~120MB) | API key management |
-
 ## Usage Examples
 
 ### Basic Usage

@@ -1,19 +1,25 @@
 # Sistema RAG para Preguntas y Respuestas sobre Documentos
 **Prueba Técnica Achilles**
 
-He creado un sistema de RAG para responder preguntas sobre documentos PDF con citación de fuentes. Construido con una arquitectura orientada a objetos utilizando modelos Pydantic y seguridad de tipos en todo el código.
+He creado un sistema de RAG para responder preguntas sobre documentos PDF con citación de fuentes. Construido con una arquitectura orientada a objetos utilizando modelos Pydantic y seguridad de tipos en todo el código. Me he limitado a los requisitos y alcance del challenge técnico, debido al poco tiempo disponible para prepararlo. 
 
 Para asegurar el uso sencillo y gratuito desde cualquier PC, he usado la librería sentence_transformers de HuggingFace para usar modelos de embeddings y reranker, ya que son modelos ligeros y gratuitos que se pueden ejecutar en local con buenos resultados. He usado FAISS (Meta, open source) como base de datos vectorial gratuita en local, creando la clase abstracta VectorStore para poder implementar otra base de datos vectorial si fuese necesario. También he optado por Gemini como proveedor LLM dado que facilita API keys gratuitas para testear sin necesidad de tarjeta de crédito. 
 
-Los metadatos de los chunks se guardan en un archivo .pkl junto al vector store, y se recuperan como objetos pydantic con toda la información del chunk incluida.
+Los documentos son parseados, limpiados y chunkeados de forma recursiva siguiendo una jerarquía de párrafo->linea->palábra->letra. Los metadatos de los chunks se guardan en un archivo .pkl junto al vector store, y se recuperan como objetos pydantic con toda la información del chunk incluida.
 Se usa cosine similarity con un threshold por defecto de 0.6 entre los embeddings del input del usuario y los embeddings de los chunks para obtener los top 20, y luego se usa el reranker para elegir los 7 mejores matches de esos 20.
 
 He creado 3 notebooks que deben ser ejecutadas en orden. 
-La primera muestra el proceso de indexación, cargando los documentos, separándolos en chunks, generando los embeddings y guardandolo en la base de datos vectorial. 
+La primera muestra el proceso de indexación, cargando los documentos, separándolos en chunks, generando los embeddings y guardándolo en la base de datos vectorial. 
 La segunda notebook muestra el proceso de retrieval con inputs de usuario (sin LLM), mostrando y comparando resultados de cosine similarity y del reranker.
 La última notebook muestra el proceso de pregunta-retrieval-respuesta usando LLM (Gemini) y muestra resultados del set de evaluación.
 
-Todo el código y notebooks han sido escritos en inglés (mi idioma principal para programar), aunque los documentos y system prompt del asistente LLM están escritos en castellano para este ejemplo en concreto. He usado el asistente de código Claude Code para ayudarme a implementar mis requisitos, usando spec-drive-development, escribiendo requisitos claros, pasos y estructura del código. Las notebooks se han aprovechado como testeo de los métodos y clases además de mostrar claramente cada paso del proceso RAG.
+Todo el código y notebooks han sido escritos en inglés (mi idioma principal para programar), aunque los documentos y system prompt del asistente LLM están escritos en castellano para este ejemplo en concreto. He usado el asistente de código Claude Code para ayudarme a implementar mis requisitos, usando spec-driven-development, escribiendo requisitos claros, pasos y estructura del código. Las notebooks se han aprovechado como testeo de los métodos y clases además de mostrar claramente cada paso del proceso RAG.
+
+Para futuras iteraciones y mejoras, se podría implementar un backend local con FastAPI y un pequeño front end para evitar cargar las librerias, base de datos y modelos de embeddings + rerank. Se podría añadir también un sistema de retrieval híbrido, usando keywords además de similitud semántica, y opciones como recuperar los X chunks anteriores y posteriores a los elegidos para ampliar la información.
+
+También se podría ampliar el alcance del asistente LLM con más agentes y memoria de contexto para convertirlo en un chat real. También se debería añadir un sistema de logging para un sistema en producción, y mantener una base de datos sobre los procesos de RAG y su estado.
+
+Aunque el RAG es una herramienta muy útil, requiere mucho trabajo de "fine tuning", evaluación y mantenimiento en caso de actualización y ampliación de documentos. Con modelos y sistemas multi-agentes modernos, existen alternativas como RAG agénticos que centran el proceso de retrieval en las decisiones de las propias LLM, por ejemplo, dándo al agente retriever un resúmen e índice del documento para que decida qué documento y qué páginas cargar de forma autónoma, aunque es un proceso potencialmente más lento y caro (por uso de tokens) que un RAG vectorial tradicional.
 
 
 ## Arquitectura
@@ -95,7 +101,6 @@ GOOGLE_API_KEY='tu-api-key-aqui'
 python index_documents.py ./pdfs
 ```
 
-Esto:
 - Parsea todos los PDFs en el directorio `pdfs/`
 - Genera embeddings para los chunks de documentos
 - Crea y guarda un índice vectorial FAISS
@@ -126,7 +131,7 @@ Documentación detallada de diseño y decisiones técnicas para cada componente:
 - **[Generación LLM](specs/llm_spec.md)** - Integración con Gemini, ingeniería de prompts, y extracción de citas
 - **[Evaluación](specs/evaluation_spec.md)** - Métricas, conjunto de prueba, y framework de evaluación
 
-Estas especificaciones documentan las decisiones de diseño, contratos de API, y detalles de implementación para cada componente del sistema RAG.
+Estas especificaciones documentan las decisiones de diseño, contratos de API, y detalles de implementación para cada componente del sistema RAG. Han sido generadas con mis instrucciones precisas de requisitos de desarrollos y ampliadas durante el avance del proyecto. Están escritas en inglés para facilitar el uso de agentes de código como Claude Code.
 
 ## Notebooks
 
@@ -148,7 +153,6 @@ Tres notebooks de Jupyter completos que demuestran el pipeline completo:
 
 ### 03_llm_generation_and_eval.ipynb
 - Generación de respuestas con LLM y citas
-- Comparación con/sin re-ranking
 - Evaluación sobre conjunto de prueba (eval.jsonl)
 - Cómputo de métricas de calidad
 - Inspección detallada de resultados

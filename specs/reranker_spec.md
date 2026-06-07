@@ -65,90 +65,6 @@ Input pair:
 
 **Advantage**: The model sees the full query-document pair. It can use cross-attention between query tokens and document tokens to determine relevance.
 
-### Internal Processing Steps
-
-#### 1. **Tokenization & Concatenation**
-```python
-# Input texts
-query = "¿Qué compromisos incluye el plan?"
-document = "El plan incluye cinco compromisos principales: comunicación clara, ..."
-
-# Tokenizer creates special format
-tokens = tokenizer(
-    query, 
-    document, 
-    padding=True, 
-    truncation=True, 
-    max_length=512
-)
-
-# Result (conceptual):
-# [CLS] ¿ Qué compromisos incluye el plan ? [SEP] El plan incluye cinco compromisos principales ... [SEP] [PAD] [PAD]
-#   0   1  2      3         4      5    6     7    8   9    10      11    12          13           ...  511  512
-```
-
-**Special tokens**:
-- `[CLS]`: Classification token (start of sequence)
-- `[SEP]`: Separator between query and document
-- `[PAD]`: Padding to reach max_length
-
-#### 2. **Self-Attention Across Query + Document**
-
-The Transformer processes all tokens together using **self-attention**:
-
-```
-Query tokens can attend to document tokens:
-"compromisos" (token 3) → attends to → "compromisos principales" (tokens 12-13)
-     ↓
-Cross-attention discovers that the document directly mentions "compromisos"
-
-Document tokens can attend to query tokens:
-"El plan incluye" (tokens 8-10) → attends to → "incluye el plan" (tokens 4-6)
-     ↓
-Cross-attention sees the question asks about what the plan "includes"
-```
-
-**Attention Matrix** (simplified for 10 tokens):
-```
-         Q1  Q2  Q3  Q4  Q5  D1  D2  D3  D4  D5
-Query1   0.1 0.2 0.1 0.0 0.1 0.3 0.1 0.0 0.1 0.0  ← Q1 attends heavily to D1
-Query2   0.2 0.3 0.1 0.2 0.0 0.1 0.1 0.0 0.0 0.0
-Query3   0.0 0.1 0.2 0.1 0.1 0.0 0.2 0.4 0.0 0.0  ← Q3 attends to D3,D4
-...
-Doc1     0.2 0.1 0.0 0.1 0.0 0.3 0.2 0.1 0.0 0.0  ← D1 attends back to Q1
-Doc2     0.0 0.0 0.1 0.3 0.1 0.1 0.2 0.1 0.0 0.0  ← D2 attends to Q4
-```
-
-This **bidirectional attention** lets the model understand:
-- Does the document contain the entities/concepts from the query?
-- Does the document structure match the query type (who/what/when/where)?
-- Is the answer explicit or just tangentially related?
-
-#### 3. **[CLS] Token Aggregation**
-
-After 12 layers of Transformer processing, the `[CLS]` token has accumulated information about the **entire query-document relationship**:
-
-```
-[CLS] final representation:
-  - Aggregates all cross-attention between query and document
-  - Encodes: "Does this document answer this query?"
-  - High-dimensional vector: [768-dim for base models, 384-dim for MiniLM]
-```
-
-#### 4. **Classification Head (Scoring)**
-
-```python
-# [CLS] representation → Linear layer → Sigmoid/tanh → Score
-cls_vector = transformer_output[0]  # [CLS] token embedding (384-dim)
-logits = linear_layer(cls_vector)   # Single value
-score = activation(logits)          # Normalized score (-10 to +10 typical range)
-```
-
-**Score interpretation**:
-- **> 8.0**: Highly relevant, document directly answers the query
-- **6.0 - 8.0**: Relevant, document contains useful information
-- **4.0 - 6.0**: Somewhat related, mentions similar topics
-- **< 4.0**: Not relevant or off-topic
 
 ### Why Cross-encoders Are More Accurate
 
@@ -180,59 +96,6 @@ claro y accesible."
 
 **Result**: Cross-encoder correctly re-ranks Document B higher because it actually answers the specific question, not just shares keywords.
 
-### Technical: Attention Scores Example
-
-For the query-document pair:
-
-```
-Query: "¿Qué compromisos incluye el plan?"
-Document: "El plan incluye cinco compromisos principales..."
-```
-
-**Cross-attention pattern** (simplified):
-
-```
-Query token "compromisos" attends to:
-  - "compromisos" in document: 0.82  ← Very high! Direct match
-  - "principales" in document: 0.15  ← Moderate, related concept
-  - "plan" in document:        0.12  ← Lower, common word
-  - Other tokens:              < 0.10
-
-Query token "incluye" attends to:
-  - "incluye" in document:     0.78  ← High! Direct match
-  - "cinco" in document:       0.22  ← Moderate, answers "how many"
-  - Other tokens:              < 0.10
-```
-
-The cross-encoder sees that critical query terms ("compromisos", "incluye") have strong matches in the document, leading to a high relevance score.
-
-### Computational Difference
-
-**Bi-encoder (one-time cost per document)**:
-```
-encode(query)    → 10ms  → cache this
-encode(doc_1)    → 10ms  → cache this
-encode(doc_2)    → 10ms  → cache this
-...
-encode(doc_619)  → 10ms  → cache this
-
-At query time:
-  similarity(query_vec, all_doc_vecs) → 1ms (dot products)
-```
-
-**Cross-encoder (per query-document pair)**:
-```
-encode([CLS] query [SEP] doc_1 [SEP])  → 10ms
-encode([CLS] query [SEP] doc_2 [SEP])  → 10ms
-...
-encode([CLS] query [SEP] doc_20 [SEP]) → 10ms
-
-Total for 20 pairs: 200ms (can't be cached!)
-```
-
-**This is why we use a two-stage pipeline**:
-1. Bi-encoder filters ~620 → 20 (fast, cached)
-2. Cross-encoder re-ranks 20 → 7 (slow, but only 20 pairs)
 
 ## Model Choice: `cross-encoder/ms-marco-MiniLM-L-12-v2`
 
@@ -395,80 +258,41 @@ class Reranker:
 
 ## Integration with RAG Pipeline
 
-### Update RAGGenerator to Use Re-ranker
+### Concept: Two-Stage Retrieval
 
-Modify `rag_system/llm.py`:
+The RAGGenerator should support an optional `use_reranking` flag that changes the retrieval strategy:
 
-```python
-from rag_system.reranker import Reranker, RerankerConfig
+**Without re-ranking (single-stage)**:
+1. Generate query embedding
+2. Vector search returns top-K chunks directly
+3. Pass chunks to LLM
 
-class RAGGenerator:
-    def __init__(
-        self,
-        vector_store: FAISSVectorStore,
-        embedder: Embedder,
-        config: LLMConfig,
-        use_reranking: bool = True  # NEW
-    ):
-        self.vector_store = vector_store
-        self.embedder = embedder
-        self.config = config
-        self.use_reranking = use_reranking
-        
-        self._load_llm()
-        
-        # NEW: Initialize re-ranker if enabled
-        if self.use_reranking:
-            self.reranker = Reranker()
-            print("✓ Re-ranker enabled")
-    
-    def _retrieve_context(self, question: str) -> List[SearchResult]:
-        """Retrieve relevant chunks with optional re-ranking."""
-        query_embedding = self.embedder.embed_query(question)
-        
-        # Retrieve more candidates if using re-ranking
-        if self.use_reranking:
-            # Get top-20 candidates
-            candidates = self.vector_store.search(
-                query_embedding,
-                top_k=20
-            )
-            
-            # Re-rank to top-7
-            reranked = self.reranker.rerank(question, candidates, top_n=7)
-            
-            # Convert back to SearchResult format
-            results = [
-                SearchResult(chunk=r.chunk, score=r.retrieval_score)
-                for r in reranked
-            ]
-            return results
-        else:
-            # Direct retrieval (no re-ranking)
-            return self.vector_store.search(
-                query_embedding,
-                top_k=self.config.top_k
-            )
-```
+**With re-ranking (two-stage)**:
+1. Generate query embedding
+2. Vector search returns top-20 candidates (cast wider net)
+3. Cross-encoder re-ranks the 20 candidates → top-7 most relevant
+4. Pass refined top-7 chunks to LLM
 
-## Performance Characteristics
+### Implementation Guidelines
 
-### Speed (CPU, typical laptop)
-- **Model loading**: 1-2 seconds (first time only)
-- **Re-ranking 20 pairs**: 100-200ms
-- **Bottleneck**: Still the LLM call (1-3 seconds)
-- **Total overhead**: ~10-15% increase in latency
+**RAGGenerator initialization**:
+- Add `use_reranking: bool` parameter (default: True)
+- Initialize a `Reranker` instance when enabled
+- Store it as an instance variable
 
-### Memory Usage
-- **Cross-encoder model**: ~500MB
-- **Combined with bi-encoder**: ~1GB total
-- **Negligible for scoring**: Just forward passes
-
-### Accuracy Improvement
-Typical improvements with re-ranking:
-- **MRR (Mean Reciprocal Rank)**: +10-20%
-- **Precision@5**: +15-25%
-- **Answer quality**: Fewer irrelevant contexts to LLM
+**Retrieval method**:
+- Branch on the `use_reranking` flag
+- If enabled:
+  - Retrieve top-20 candidates from vector store
+  - Call `reranker.rerank(query, candidates, top_n=7)`
+  - Convert RerankResult back to SearchResult format
+- If disabled:
+  - Retrieve top-K directly from vector store using config
+  
+**Key considerations**:
+- The reranker needs both the query string and the candidates
+- Preserve both retrieval_score and rerank_score in results
+- The LLM receives the same number of chunks either way (5-7 typically)
 
 ## Usage Examples
 
@@ -705,19 +529,6 @@ numpy>=1.24.0
 scipy>=1.10.0  # For rank correlation testing
 ```
 
-## Expected Improvement Metrics
-
-Based on typical RAG benchmarks:
-
-| Metric | Without Re-ranking | With Re-ranking | Improvement |
-|--------|-------------------|-----------------|-------------|
-| MRR@5 | 0.65 | 0.78 | +20% |
-| Precision@5 | 0.72 | 0.85 | +18% |
-| NDCG@5 | 0.68 | 0.81 | +19% |
-| Answer Quality | Baseline | +15-25% | Subjective |
-
-**Note**: Actual improvements depend on query types and corpus quality.
-
 ## Troubleshooting
 
 ### Issue: Re-ranking is slow
@@ -742,13 +553,3 @@ else:
 ```python
 config = RerankerConfig(batch_size=8)  # Lower memory usage
 ```
-
-## Integration Checklist
-
-- [ ] Create `rag_system/reranker.py` with `Reranker` class
-- [ ] Add `RerankResult` to `rag_system/models.py`
-- [ ] Update `RAGGenerator` in `rag_system/llm.py` to support re-ranking
-- [ ] Update `rag_system/__init__.py` to export re-ranker classes
-- [ ] Add `sentence-transformers>=2.2.0` to `requirements.txt`
-- [ ] Create comparison demo in notebook 03 (with/without re-ranking)
-- [ ] Update specs with actual results after implementation

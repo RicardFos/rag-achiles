@@ -363,15 +363,6 @@ def build_index(pdf_dir: Path) -> FAISSVectorStore:
 vector_store = build_index(Path("pdfs"))
 ```
 
-## Performance
-
-### For ~619 chunks (our corpus):
-- **Index creation**: <1ms
-- **Adding 619 vectors**: ~15ms
-- **Single query (top-5)**: <1ms
-- **Save to disk**: ~12ms
-- **Load from disk**: ~8ms
-- **Disk space**: ~1MB (index) + ~500KB (metadata)
 
 ### Scalability
 | Vectors | Index Type | Query Time |

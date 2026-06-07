@@ -560,36 +560,6 @@ for doc, page in matches:
 
 Use regex version for more reliable extraction.
 
-## Performance
-
-### Latency Breakdown
-For typical question (~20 words):
-- **Embed query**: 10-30ms
-- **Vector search**: 1-5ms
-- **Format context**: <1ms
-- **LLM call**: 1,000-3,000ms ← bottleneck
-- **Extract citations**: <1ms
-- **Total**: ~1-3 seconds
-
-### Cost (Gemini Free Tier)
-- **Limits**: 15 requests/min, 1M/day
-- **Cost**: $0 (free)
-- **For demo**: ~50-100 eval questions ← well within limits
-
-### Optimization Tips
-```python
-# 1. Use flash model (faster, cheaper)
-config = LLMConfig(
-    model_name="gemini-2.0-flash-001",  # Not "gemini-2.0-flash-001"
-    max_output_tokens=512           # Shorter = faster
-)
-
-# 2. Reduce retrieval
-config = LLMConfig(top_k=3)  # Fewer chunks = less context
-
-# 3. Batch questions (reuse embedder/vector_store)
-responses = rag.batch_generate(questions)  # Don't recreate RAG each time
-```
 
 ## Error Handling
 

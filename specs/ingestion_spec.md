@@ -318,9 +318,3 @@ Chunk 3:                           [CCCCCCCCCC][DDDDDDDDDD]
 - **Separators are configurable**: Adjust for different document types (code, tables, etc.)
 - **Chunk size is a target**: Actual chunks may be slightly smaller to respect boundaries
 - **Overlap creates redundancy**: Embedding cost increases ~10-20% but retrieval quality improves significantly
-
-## Expected Output
-For 9 Madrid council PDFs (~6MB total):
-- **Total chunks**: ~600-650 chunks (with 512 tokens, 50 overlap)
-- **Processing time**: ~30-60 seconds (including embedding)
-- **Average chunk size**: ~400-500 characters (≈512 tokens)
