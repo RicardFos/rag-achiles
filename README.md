@@ -5,6 +5,8 @@ He creado un sistema de RAG para responder preguntas sobre documentos PDF con ci
 
 Para asegurar el uso sencillo y gratuito desde cualquier PC, he usado la librería sentence_transformers de HuggingFace para usar modelos de embeddings y reranker, ya que son modelos ligeros y gratuitos que se pueden ejecutar en local con buenos resultados. He usado FAISS (Meta, open source) como base de datos vectorial gratuita en local, creando la clase abstracta VectorStore para poder implementar otra base de datos vectorial si fuese necesario. También he optado por Gemini como proveedor LLM dado que facilita API keys gratuitas para testear sin necesidad de tarjeta de crédito. 
 
+Como documentos PDF de prueba, he usado un conjunto de [documentos oficiales del Ayuntamiento de Madrid](https://www.madrid.es/portales/munimadrid/es/Inicio/Cultura-ocio-y-deporte/Publicaciones/Reuniones-del-grupo-motor-del-IV-Plan-de-Gobierno-Abierto-del-Ayuntamiento-de-Madrid/?vgnextfmt=default&vgnextoid=968e725075c7a910VgnVCM200000f921e388RCRD&vgnextchannel=f9e2f073808fe410VgnVCM2000000c205a0aRCRD), dado que son públicos, en formato PDF parseable (no hace falta OCR) y trata temas específicos que una LLM difícilmente pueda responder sin ayuda de un RAG.
+
 Los documentos son parseados, limpiados y chunkeados de forma recursiva siguiendo una jerarquía de párrafo->linea->palábra->letra. Los metadatos de los chunks se guardan en un archivo .pkl junto al vector store, y se recuperan como objetos pydantic con toda la información del chunk incluida.
 Se usa cosine similarity con un threshold por defecto de 0.6 entre los embeddings del input del usuario y los embeddings de los chunks para obtener los top 20, y luego se usa el reranker para elegir los 7 mejores matches de esos 20.
 
@@ -28,7 +30,7 @@ Aunque el RAG es una herramienta muy útil, requiere mucho trabajo de "fine tuni
 ┌─────────────┐
 │   PDFs      │
 └──────┬──────┘
-       │ Parser (PyMuPDF)
+       │ Parser (PyPDF2)
        ↓
 ┌─────────────────────┐
 │ Documentos Chunked  │ (recursivo, 512 tokens, 50 overlap)
